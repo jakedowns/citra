@@ -45,6 +45,8 @@ uniform float4 i_resolution;
 uniform float4 o_resolution;
 // Layer
 uniform int layer;
+// Screen
+uniform int screen;
 
 uniform sampler2D color_texture;
 uniform sampler2D color_texture_r;

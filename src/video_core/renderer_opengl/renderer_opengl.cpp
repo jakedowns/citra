@@ -248,6 +248,7 @@ layout(location = 0) out vec4 color;
 uniform vec4 i_resolution;
 uniform vec4 o_resolution;
 uniform int layer;
+uniform int screen;
 
 uniform sampler2D color_texture;
 
@@ -275,6 +276,7 @@ out vec4 color;
 
 uniform vec4 resolution;
 uniform int layer;
+uniform int screen;
 
 uniform sampler2D color_texture;
 uniform sampler2D color_texture_r;
@@ -737,6 +739,7 @@ void RendererOpenGL::ReloadShader() {
     uniform_i_resolution = glGetUniformLocation(shader.handle, "i_resolution");
     uniform_o_resolution = glGetUniformLocation(shader.handle, "o_resolution");
     uniform_layer = glGetUniformLocation(shader.handle, "layer");
+    uniform_screen = glGetUniformLocation(shader.handle, "screen");
     attrib_position = glGetAttribLocation(shader.handle, "vert_position");
     attrib_tex_coord = glGetAttribLocation(shader.handle, "vert_tex_coord");
 }
@@ -988,6 +991,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
     }
 
     glUniform1i(uniform_layer, 0);
+    glUniform1i(uniform_screen, 0); // 0 = top, 1 = bottom
     if (layout.top_screen_enabled) {
         if (layout.is_rotated) {
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {
@@ -1046,6 +1050,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
         }
     }
     glUniform1i(uniform_layer, 0);
+    glUniform1i(uniform_screen, 1); // 0 = top, 1 = bottom
     if (layout.bottom_screen_enabled) {
         if (layout.is_rotated) {
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {

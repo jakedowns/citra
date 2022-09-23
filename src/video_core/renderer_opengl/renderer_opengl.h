@@ -125,6 +125,7 @@ private:
     GLuint uniform_i_resolution;
     GLuint uniform_o_resolution;
     GLuint uniform_layer;
+    GLuint uniform_screen;
 
     // Shader attribute input indices
     GLuint attrib_position;
