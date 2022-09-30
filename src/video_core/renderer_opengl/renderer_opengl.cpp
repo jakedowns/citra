@@ -995,7 +995,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
     if (layout.top_screen_enabled) {
         if (layout.is_rotated) {
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {
-                DrawSingleScreenRotated(screen_infos[0], (float)top_screen.left,
+                DrawSingleScreenRotated(screen_infos[1], (float)top_screen.left,
                                         (float)top_screen.top, (float)top_screen.GetWidth(),
                                         (float)top_screen.GetHeight());
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
@@ -1024,7 +1024,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
             }
         } else {
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {
-                DrawSingleScreen(screen_infos[0], (float)top_screen.left, (float)top_screen.top,
+                DrawSingleScreen(screen_infos[1], (float)top_screen.left, (float)top_screen.top,
                                  (float)top_screen.GetWidth(), (float)top_screen.GetHeight());
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
                 DrawSingleScreen(screen_infos[0], (float)top_screen.left / 2, (float)top_screen.top,
