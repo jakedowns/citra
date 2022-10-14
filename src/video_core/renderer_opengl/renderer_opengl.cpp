@@ -982,7 +982,23 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
         glUniform1i(uniform_color_texture_r, 1);
     }
 
+    float layout_aspect = (float)layout.width / (float)layout.height;
+    float top_screen_aspect = (float)top_screen.GetWidth() / (float)top_screen.GetHeight();
+    float bottom_screen_aspect = (float)bottom_screen.GetWidth() / (float)bottom_screen.GetHeight();
+
+    auto letterBoxCheck = [top_screen, layout](float full_tex_width, float full_tex_height) {
+        float scaled_height = (full_tex_height * layout.width) / full_tex_width;
+        if (scaled_height <= layout.height) {
+            // full width / letter box
+            return true;
+            // std::tuple<float, float>(layout.width, scaled_height);
+        }
+        return false;
+        // float scaled_width = (full_tex_width * layout.height)/full_tex_height
+    };
+
     glUniform1i(uniform_layer, 0);
+
     if (layout.top_screen_enabled) {
         if (layout.is_rotated) {
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {
@@ -999,7 +1015,6 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                                         (float)top_screen.top, (float)top_screen.GetWidth() / 2,
                                         (float)top_screen.GetHeight());
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
-                // TODO: need to account for when layout height is greater than layout width
                 if (layout.bottom_screen_enabled) {
                     float half_width = (float)top_screen.GetWidth() / 2.0f;
                     float extra_space = (float)layout.width - (float)top_screen.GetWidth();
@@ -1020,13 +1035,24 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                 } else {
                     // full v-height
                     // top screen: left eye
-                    DrawSingleScreenRotated(screen_infos[0], 0.0f, (float)top_screen.top,
-                                            (float)layout.width / 2, (float)top_screen.GetHeight());
+                    bool use_full_width = letterBoxCheck(800.0f, 240.0f);
+                    float width, height;
+                    if (use_full_width) {
+                        width = layout.width / 2.0;
+                        height = (240.0f * layout.width) / 800.0f;
+                    } else {
+                        width = (800.0f * layout.height) / 240.0f;
+                        width /= 2.0;
+                        height = layout.height;
+                    }
+                    float x2 = (float)layout.width / 2;
+                    float x1 = x2 - width;
+                    float y = (layout.height / 2.0) - (height / 2.0);
+
+                    DrawSingleScreenRotated(screen_infos[0], x1, y, width, height);
                     glUniform1i(uniform_layer, 1);
                     // top screen: right eye
-                    DrawSingleScreenRotated(screen_infos[1], (float)layout.width / 2,
-                                            (float)top_screen.top, (float)layout.width / 2,
-                                            (float)top_screen.GetHeight());
+                    DrawSingleScreenRotated(screen_infos[1], x2, y, width, height);
                 }
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR) {
                 DrawSingleScreenRotated(screen_infos[0], layout.top_screen.left,
