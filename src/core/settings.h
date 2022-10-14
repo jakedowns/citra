@@ -195,6 +195,7 @@ struct Values {
 
     StereoRenderOption render_3d;
     std::atomic<u8> factor_3d;
+    bool swap_left_right;
 
     int cardboard_screen_size;
     int cardboard_x_shift;

@@ -348,6 +348,7 @@ void Config::ReadLayoutValues() {
     Settings::values.render_3d = static_cast<Settings::StereoRenderOption>(
         ReadSetting(QStringLiteral("render_3d"), 0).toInt());
     Settings::values.factor_3d = ReadSetting(QStringLiteral("factor_3d"), 0).toInt();
+    Settings::values.swap_left_right = ReadSetting(QStringLiteral("swap_left_right"), false).toBool();
     Settings::values.pp_shader_name =
         ReadSetting(QStringLiteral("pp_shader_name"),
                     (Settings::values.render_3d == Settings::StereoRenderOption::Anaglyph)

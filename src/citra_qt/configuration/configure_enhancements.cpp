@@ -47,6 +47,8 @@ ConfigureEnhancements::ConfigureEnhancements(QWidget* parent)
         if (!ui->toggle_preload_textures->isEnabled())
             ui->toggle_preload_textures->setChecked(false);
     });
+
+    // TODO: connect toggle_swap_left_right to only appear if render_3d_combobox is Side By Side
 }
 
 void ConfigureEnhancements::SetConfiguration() {
@@ -67,6 +69,7 @@ void ConfigureEnhancements::SetConfiguration() {
     ui->upright_screen->setChecked(Settings::values.upright_screen);
     ui->toggle_dump_textures->setChecked(Settings::values.dump_textures);
     ui->toggle_custom_textures->setChecked(Settings::values.custom_textures);
+    ui->toggle_swap_left_right->setChecked(Settings::values.swap_left_right);
     ui->toggle_preload_textures->setChecked(Settings::values.preload_textures);
     bg_color = QColor::fromRgbF(Settings::values.bg_red, Settings::values.bg_green,
                                 Settings::values.bg_blue);
@@ -117,6 +120,7 @@ void ConfigureEnhancements::ApplyConfiguration() {
     Settings::values.upright_screen = ui->upright_screen->isChecked();
     Settings::values.dump_textures = ui->toggle_dump_textures->isChecked();
     Settings::values.custom_textures = ui->toggle_custom_textures->isChecked();
+    Settings::values.swap_left_right = ui->toggle_swap_left_right->isChecked();
     Settings::values.preload_textures = ui->toggle_preload_textures->isChecked();
     Settings::values.bg_red = static_cast<float>(bg_color.redF());
     Settings::values.bg_green = static_cast<float>(bg_color.greenF());

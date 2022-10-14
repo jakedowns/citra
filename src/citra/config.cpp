@@ -141,6 +141,7 @@ void Config::ReadValues() {
         sdl2_config->GetInteger("Renderer", "render_3d", 0));
     Settings::values.factor_3d =
         static_cast<u8>(sdl2_config->GetInteger("Renderer", "factor_3d", 0));
+    Settings::values.swap_left_right = sdl2_config->GetBoolean("Layout", "swap_left_right", false);
     std::string default_shader = "none (builtin)";
     if (Settings::values.render_3d == Settings::StereoRenderOption::Anaglyph)
         default_shader = "dubois (builtin)";

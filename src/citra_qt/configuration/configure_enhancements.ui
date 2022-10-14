@@ -212,6 +212,20 @@
         </item>
        </layout>
       </item>
+       <item>
+         <layout class="QVBoxLayout" name="veritcalLayout_8">
+           <item>
+             <widget class="QCheckBox" name="toggle_swap_left_right">
+               <property name="toolTip">
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Swap Left and Right Images in Side By Side for cross-viewing&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               </property>
+               <property name="text">
+                 <string>Swap L/R; Enable Side By Side Crossview</string>
+               </property>
+             </widget>
+           </item>
+         </layout>
+       </item>
      </layout>
     </widget>
    </item>
@@ -355,6 +369,7 @@
   <tabstop>texture_filter_combobox</tabstop>
   <tabstop>render_3d_combobox</tabstop>
   <tabstop>factor_3d</tabstop>
+  <tabstop>toggle_swap_left_right</tabstop>
   <tabstop>layout_combobox</tabstop>
   <tabstop>swap_screen</tabstop>
   <tabstop>upright_screen</tabstop>

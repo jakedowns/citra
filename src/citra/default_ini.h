@@ -166,6 +166,10 @@ render_3d =
 # 0 - 100: Intensity. 0 (default)
 factor_3d =
 
+# Swap L/R in SBS
+# 0 (default): Off, 1: On
+swap_left_right =
+
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.
 # Loaded from shaders/anaglyph if render_3d is anaglyph
