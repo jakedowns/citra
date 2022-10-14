@@ -66,7 +66,8 @@ EmuWindow::~EmuWindow() {
  */
 static bool IsWithinTouchscreen(const Layout::FramebufferLayout& layout, unsigned framebuffer_x,
                                 unsigned framebuffer_y) {
-    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf ||
+        Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
         return (framebuffer_y >= layout.bottom_screen.top &&
                 framebuffer_y < layout.bottom_screen.bottom &&
                 ((framebuffer_x >= layout.bottom_screen.left / 2 &&
@@ -91,13 +92,15 @@ static bool IsWithinTouchscreen(const Layout::FramebufferLayout& layout, unsigne
 
 std::tuple<unsigned, unsigned> EmuWindow::ClipToTouchScreen(unsigned new_x, unsigned new_y) const {
     if (new_x >= framebuffer_layout.width / 2) {
-        if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide)
+        if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf ||
+            Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull)
             new_x -= framebuffer_layout.width / 2;
         else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR)
             new_x -=
                 (framebuffer_layout.width / 2) - (framebuffer_layout.cardboard.user_x_shift * 2);
     }
-    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf ||
+        Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
         new_x = std::max(new_x, framebuffer_layout.bottom_screen.left / 2);
         new_x = std::min(new_x, framebuffer_layout.bottom_screen.right / 2 - 1);
     } else {
@@ -116,14 +119,16 @@ bool EmuWindow::TouchPressed(unsigned framebuffer_x, unsigned framebuffer_y) {
         return false;
 
     if (framebuffer_x >= framebuffer_layout.width / 2) {
-        if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide)
+        if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf ||
+            Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull)
             framebuffer_x -= framebuffer_layout.width / 2;
         else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR)
             framebuffer_x -=
                 (framebuffer_layout.width / 2) - (framebuffer_layout.cardboard.user_x_shift * 2);
     }
     std::lock_guard guard(touch_state->mutex);
-    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+    if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf ||
+        Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
         touch_state->touch_x =
             static_cast<float>(framebuffer_x - framebuffer_layout.bottom_screen.left / 2) /
             (framebuffer_layout.bottom_screen.right / 2 -

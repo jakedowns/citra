@@ -42,7 +42,8 @@ enum class MicInputType {
 
 enum class StereoRenderOption {
     Off,
-    SideBySide,
+    SideBySideHalf,
+    SideBySideFull,
     Anaglyph,
     Interlaced,
     ReverseInterlaced,

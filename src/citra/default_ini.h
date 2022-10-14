@@ -159,7 +159,7 @@ bg_blue =
 bg_green =
 
 # Whether and how Stereoscopic 3D should be rendered
-# 0 (default): Off, 1: Side by Side, 2: Anaglyph, 3: Interlaced, 4: Reverse Interlaced
+# 0 (default): Off, 1: Side by Side - Half, 2: Side By Side - Full, 3: Anaglyph, 4: Interlaced, 5: Reverse Interlaced
 render_3d =
 
 # Change 3D Intensity
@@ -169,6 +169,7 @@ factor_3d =
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.
 # Loaded from shaders/anaglyph if render_3d is anaglyph
+# Loaded from shaders/interlaced if render_3d is interlaced TODO; currently loads from `shaders` root
 pp_shader_name =
 
 # Whether to enable linear filtering or not

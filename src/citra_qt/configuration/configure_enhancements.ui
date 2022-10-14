@@ -158,7 +158,12 @@
           </item>
           <item>
            <property name="text">
-            <string>Side by Side</string>
+            <string>Side by Side - Half</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Side by Side - Full</string>
            </property>
           </item>
           <item>

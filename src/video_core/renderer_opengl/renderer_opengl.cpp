@@ -24,7 +24,6 @@
 #include "video_core/video_core.h"
 
 namespace OpenGL {
-
 // If the size of this is too small, it ends up creating a soft cap on FPS as the renderer will have
 // to wait on available presentation frames. There doesn't seem to be much of a downside to a larger
 // number but 9 swap textures at 60FPS presentation allows for 800% speed so thats probably fine
@@ -333,7 +332,6 @@ struct ScreenRectVertex {
  */
 static std::array<GLfloat, 3 * 2> MakeOrthographicMatrix(const float width, const float height,
                                                          bool flipped) {
-
     std::array<GLfloat, 3 * 2> matrix; // Laid out in column-major order
 
     // Last matrix row is implicitly assumed to be [0, 0, 1].
@@ -354,7 +352,6 @@ static std::array<GLfloat, 3 * 2> MakeOrthographicMatrix(const float width, cons
 
 RendererOpenGL::RendererOpenGL(Frontend::EmuWindow& window)
     : RendererBase{window}, frame_dumper(Core::System::GetInstance().VideoDumper(), window) {
-
     window.mailbox = std::make_unique<OGLTextureMailbox>();
     frame_dumper.mailbox = std::make_unique<OGLVideoDumpingMailbox>();
 }
@@ -477,7 +474,6 @@ void RendererOpenGL::PrepareRendertarget() {
 void RendererOpenGL::RenderToMailbox(const Layout::FramebufferLayout& layout,
                                      std::unique_ptr<Frontend::TextureMailbox>& mailbox,
                                      bool flipped) {
-
     Frontend::Frame* frame;
     {
         MICROPROFILE_SCOPE(OpenGL_WaitPresent);
@@ -529,7 +525,6 @@ void RendererOpenGL::RenderToMailbox(const Layout::FramebufferLayout& layout,
  */
 void RendererOpenGL::LoadFBToScreenInfo(const GPU::Regs::FramebufferConfig& framebuffer,
                                         ScreenInfo& screen_info, bool right_eye) {
-
     if (framebuffer.address_right1 == 0 || framebuffer.address_right2 == 0)
         right_eye = false;
 
@@ -994,7 +989,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                 DrawSingleScreenRotated(screen_infos[0], (float)top_screen.left,
                                         (float)top_screen.top, (float)top_screen.GetWidth(),
                                         (float)top_screen.GetHeight());
-            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf) {
                 DrawSingleScreenRotated(screen_infos[0], (float)top_screen.left / 2,
                                         (float)top_screen.top, (float)top_screen.GetWidth() / 2,
                                         (float)top_screen.GetHeight());
@@ -1003,6 +998,17 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                                         ((float)top_screen.left / 2) + ((float)layout.width / 2),
                                         (float)top_screen.top, (float)top_screen.GetWidth() / 2,
                                         (float)top_screen.GetHeight());
+                //} else if (Settings::values.render_3d ==
+                //Settings::StereoRenderOption::SideBySideFull) {
+                //    // top screen: left eye
+                //    DrawSingleScreenRotated(screen_infos[0], 0.0f,
+                //                            0.0f, (float)layout.width / 2,
+                //                            (float)top_screen.GetHeight());
+                //    glUniform1i(uniform_layer, 1);
+                //    // top screen: right eye
+                //    DrawSingleScreenRotated(screen_infos[1], (float)layout.width / 2, 0,
+                //                            (float)layout.width / 2,
+                //                            (float)top_screen.GetHeight());
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR) {
                 DrawSingleScreenRotated(screen_infos[0], layout.top_screen.left,
                                         layout.top_screen.top, layout.top_screen.GetWidth(),
@@ -1022,7 +1028,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
             if (Settings::values.render_3d == Settings::StereoRenderOption::Off) {
                 DrawSingleScreen(screen_infos[0], (float)top_screen.left, (float)top_screen.top,
                                  (float)top_screen.GetWidth(), (float)top_screen.GetHeight());
-            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf) {
                 DrawSingleScreen(screen_infos[0], (float)top_screen.left / 2, (float)top_screen.top,
                                  (float)top_screen.GetWidth() / 2, (float)top_screen.GetHeight());
                 glUniform1i(uniform_layer, 1);
@@ -1030,6 +1036,29 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                                  ((float)top_screen.left / 2) + ((float)layout.width / 2),
                                  (float)top_screen.top, (float)top_screen.GetWidth() / 2,
                                  (float)top_screen.GetHeight());
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
+                if (layout.bottom_screen_enabled) {
+                    // half v-height
+                    // top screen: left eye
+                    DrawSingleScreen(screen_infos[0], 0.0f, (float)top_screen.top,
+                                     (float)top_screen.GetWidth(), (float)top_screen.GetHeight());
+                    glUniform1i(uniform_layer, 1);
+
+                    // top screen: right eye
+                    DrawSingleScreen(screen_infos[1], (float)layout.width / 2,
+                                     (float)top_screen.top, (float)top_screen.GetWidth(),
+                                     (float)top_screen.GetHeight());
+                } else {
+                    // full v-height
+                    // top screen: left eye
+                    DrawSingleScreen(screen_infos[0], 0.0f, (float)top_screen.top,
+                                     (float)layout.width / 2, (float)top_screen.GetHeight());
+                    glUniform1i(uniform_layer, 1);
+                    // top screen: right eye
+                    DrawSingleScreen(screen_infos[1], (float)layout.width / 2,
+                                     (float)top_screen.top, top_screen.GetWidth(),
+                                     (float)top_screen.GetHeight());
+                }
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR) {
                 DrawSingleScreen(screen_infos[0], layout.top_screen.left, layout.top_screen.top,
                                  layout.top_screen.GetWidth(), layout.top_screen.GetHeight());
@@ -1052,7 +1081,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                 DrawSingleScreenRotated(screen_infos[2], (float)bottom_screen.left,
                                         (float)bottom_screen.top, (float)bottom_screen.GetWidth(),
                                         (float)bottom_screen.GetHeight());
-            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf) {
                 DrawSingleScreenRotated(
                     screen_infos[2], (float)bottom_screen.left / 2, (float)bottom_screen.top,
                     (float)bottom_screen.GetWidth() / 2, (float)bottom_screen.GetHeight());
@@ -1061,6 +1090,19 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                     screen_infos[2], ((float)bottom_screen.left / 2) + ((float)layout.width / 2),
                     (float)bottom_screen.top, (float)bottom_screen.GetWidth() / 2,
                     (float)bottom_screen.GetHeight());
+                /*} else if (Settings::values.render_3d ==
+                   Settings::StereoRenderOption::SideBySideFull) { DrawSingleScreenRotated(
+                        screen_infos[2],
+                        ((float)layout.width / 2) - ((float)bottom_screen.left / 2),
+                        (float)bottom_screen.top,
+                        (float)bottom_screen.GetWidth() / 2,
+                        (float)bottom_screen.GetHeight());
+                    glUniform1i(uniform_layer, 1);
+                    DrawSingleScreenRotated(screen_infos[2],
+                        ((float)layout.width / 2) + ( (((float)layout.width / 2) -
+                   ((float)bottom_screen.GetWidth() / 2) / 2 )), (float)bottom_screen.top,
+                        (float)bottom_screen.GetWidth(),
+                        (float)bottom_screen.GetHeight());*/
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR) {
                 DrawSingleScreenRotated(screen_infos[2], layout.bottom_screen.left,
                                         layout.bottom_screen.top, layout.bottom_screen.GetWidth(),
@@ -1082,7 +1124,7 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                 DrawSingleScreen(screen_infos[2], (float)bottom_screen.left,
                                  (float)bottom_screen.top, (float)bottom_screen.GetWidth(),
                                  (float)bottom_screen.GetHeight());
-            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySide) {
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideHalf) {
                 DrawSingleScreen(screen_infos[2], (float)bottom_screen.left / 2,
                                  (float)bottom_screen.top, (float)bottom_screen.GetWidth() / 2,
                                  (float)bottom_screen.GetHeight());
@@ -1091,6 +1133,19 @@ void RendererOpenGL::DrawScreens(const Layout::FramebufferLayout& layout, bool f
                                  ((float)bottom_screen.left / 2) + ((float)layout.width / 2),
                                  (float)bottom_screen.top, (float)bottom_screen.GetWidth() / 2,
                                  (float)bottom_screen.GetHeight());
+            } else if (Settings::values.render_3d == Settings::StereoRenderOption::SideBySideFull) {
+                // bottom screen left
+                DrawSingleScreen(screen_infos[2], (float)bottom_screen.left / 2,
+                                 (float)bottom_screen.top, (float)bottom_screen.GetWidth(),
+                                 (float)bottom_screen.GetHeight());
+                glUniform1i(uniform_layer, 1);
+                // bottom screen right
+                DrawSingleScreen(
+                    screen_infos[2],
+                    ((float)layout.width / 2) +
+                        ((((float)layout.width / 2) - ((float)bottom_screen.GetWidth() / 2) / 2)),
+                    (float)bottom_screen.top, (float)bottom_screen.GetWidth(),
+                    (float)bottom_screen.GetHeight());
             } else if (Settings::values.render_3d == Settings::StereoRenderOption::CardboardVR) {
                 DrawSingleScreen(screen_infos[2], layout.bottom_screen.left,
                                  layout.bottom_screen.top, layout.bottom_screen.GetWidth(),
@@ -1276,5 +1331,4 @@ VideoCore::ResultStatus RendererOpenGL::Init() {
 
 /// Shutdown the renderer
 void RendererOpenGL::ShutDown() {}
-
 } // namespace OpenGL
