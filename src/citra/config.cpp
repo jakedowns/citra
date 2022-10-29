@@ -138,7 +138,7 @@ void Config::ReadValues() {
         sdl2_config->GetString("Renderer", "texture_filter_name", "none");
 
     Settings::values.mono_render_left_eye =
-        sdl2_config->GetBoolean("Renderer", "mono_render_left_eye", false);
+        sdl2_config->GetBoolean("Renderer", "mono_render_left_eye", true);
     Settings::values.render_3d = static_cast<Settings::StereoRenderOption>(
         sdl2_config->GetInteger("Renderer", "render_3d", 0));
     Settings::values.factor_3d =
