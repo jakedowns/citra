@@ -74,6 +74,8 @@ public final class EmulationActivity extends AppCompatActivity {
     public static final int MENU_ACTION_JOYSTICK_REL_CENTER = 15;
     public static final int MENU_ACTION_DPAD_SLIDE_ENABLE = 16;
     public static final int MENU_ACTION_OPEN_CHEATS = 17;
+    public static final int MENU_ACTION_HAPTIC_FEEDBACK = 18;
+    public static final int MENU_ACTION_VIBRATE_ON_RELEASE = 19;
 
     public static final int REQUEST_SELECT_AMIIBO = 2;
     private static final int EMULATION_RUNNING_NOTIFICATION = 0x1000;
@@ -114,6 +116,10 @@ public final class EmulationActivity extends AppCompatActivity {
                 EmulationActivity.MENU_ACTION_DPAD_SLIDE_ENABLE);
         buttonsActionsMap
                 .append(R.id.menu_emulation_open_cheats, EmulationActivity.MENU_ACTION_OPEN_CHEATS);
+        buttonsActionsMap.append(R.id.menu_emulation_haptic_feedback,
+                EmulationActivity.MENU_ACTION_HAPTIC_FEEDBACK);
+        buttonsActionsMap.append(R.id.menu_emulation_vibrate_on_release,
+                EmulationActivity.MENU_ACTION_VIBRATE_ON_RELEASE);
     }
 
     private View mDecorView;
@@ -306,6 +312,7 @@ public final class EmulationActivity extends AppCompatActivity {
         menu.findItem(R.id.menu_emulation_show_fps).setChecked(EmulationMenuSettings.getShowFps());
         menu.findItem(R.id.menu_emulation_swap_screens).setChecked(EmulationMenuSettings.getSwapScreens());
         menu.findItem(R.id.menu_emulation_show_overlay).setChecked(EmulationMenuSettings.getShowOverlay());
+        menu.findItem(R.id.menu_emulation_vibrate_on_release).setChecked(EmulationMenuSettings.getVibrateOnReleaseEnable());
 
         return true;
     }
@@ -479,6 +486,16 @@ public final class EmulationActivity extends AppCompatActivity {
 
             case MENU_ACTION_OPEN_CHEATS:
                 CheatsActivity.launch(this);
+                break;
+
+            case MENU_ACTION_HAPTIC_FEEDBACK:
+                adjustHapticFeedback();
+                break;
+
+            case MENU_ACTION_VIBRATE_ON_RELEASE:
+                final boolean isVibrateOnReleaseEnabled = !EmulationMenuSettings.getVibrateOnReleaseEnable();
+                EmulationMenuSettings.setVibrateOnReleaseEnable(isVibrateOnReleaseEnabled);
+                item.setChecked(isVibrateOnReleaseEnabled);
                 break;
         }
 
@@ -660,6 +677,57 @@ public final class EmulationActivity extends AppCompatActivity {
         editor.putInt("controlScale", scale);
         editor.apply();
         mEmulationFragment.refreshInputOverlay();
+    }
+
+    private void adjustHapticFeedback() {
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View view = inflater.inflate(R.layout.dialog_seekbar, null);
+        int defaultHapticLevel = 0;
+
+        final SeekBar seekbar = view.findViewById(R.id.seekbar);
+        final TextView value = view.findViewById(R.id.text_value);
+        final TextView units = view.findViewById(R.id.text_units);
+
+        seekbar.setMax(255);
+        seekbar.setMin(0);
+        seekbar.setProgress(mPreferences.getInt("hapticFeedbackLevel", defaultHapticLevel));
+        seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                value.setText(String.valueOf(Math.round(progress / 255.0 * 100)));
+            }
+
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                setHapticFeedbackLevel(seekbar.getProgress());
+            }
+        });
+
+        value.setText(String.valueOf(Math.round(seekbar.getProgress() / 255.0 * 100)));
+        units.setText("%");
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.haptic_feedback);
+        builder.setView(view);
+        final int previousProgress = seekbar.getProgress();
+        builder.setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> {
+            setHapticFeedbackLevel(previousProgress);
+        });
+        builder.setPositiveButton(android.R.string.ok, (dialogInterface, i) -> {
+            setHapticFeedbackLevel(seekbar.getProgress());
+        });
+        builder.setNeutralButton(R.string.slider_default, (dialogInterface, i) -> {
+            setHapticFeedbackLevel(defaultHapticLevel);
+        });
+
+        builder.create().show();
+    }
+
+    private void setHapticFeedbackLevel(int hapticFeedbackLevel) {
+        SharedPreferences.Editor editor = mPreferences.edit();
+        editor.putInt("hapticFeedbackLevel", hapticFeedbackLevel);
+        editor.apply();
     }
 
     private void resetOverlay() {

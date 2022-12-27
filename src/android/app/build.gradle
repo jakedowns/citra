@@ -32,6 +32,7 @@ android {
         // TODO If this is ever modified, change application_id in strings.xml
         applicationId "org.citra.citra_emu"
         minSdkVersion 28
+        //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 29
         versionCode autoVersion
         versionName getVersion()
