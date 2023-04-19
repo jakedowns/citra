@@ -141,6 +141,8 @@
         <item>@string/interlaced</item>
         <item>@string/reverse_interlaced</item>
         <item>@string/cardboard_vr</item>
+<item>@string/lumepad_1</item>
+<item>@string/lumepad_2</item>
     </string-array>
 
     <integer-array name="render3dValues">
