@@ -11,6 +11,7 @@ import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import com.leia.sdk.views.InterlacedSurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;

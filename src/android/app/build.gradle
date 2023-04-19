@@ -31,7 +31,7 @@ android {
     defaultConfig {
         // TODO If this is ever modified, change application_id in strings.xml
         applicationId "org.citra.citra_emu"
-        minSdkVersion 28
+        minSdkVersion 30
         targetSdkVersion 31
         versionCode autoVersion
         versionName getVersion()
@@ -147,6 +147,8 @@ dependencies {
     // To use the androidx.test.core APIs
     androidTestImplementation "androidx.test:core:1.5.0"
     androidTestImplementation "androidx.test.ext:junit:1.1.5"
+
+    implementation files("../CNSDK/sdk-final-aar-debug.aar")
 }
 
 def getVersion() {

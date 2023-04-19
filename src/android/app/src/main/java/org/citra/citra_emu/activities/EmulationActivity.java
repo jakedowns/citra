@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import android.util.Pair;
 import android.util.SparseIntArray;
 import android.view.InputDevice;
@@ -62,8 +63,10 @@ import static java.lang.annotation.RetentionPolicy.SOURCE;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.slider.Slider;
+import com.leia.core.LogLevel;
+import com.leia.sdk.LeiaSDK;
 
-public final class EmulationActivity extends AppCompatActivity {
+public final class EmulationActivity extends AppCompatActivity implements LeiaSDK.Delegate {
     public static final String EXTRA_SELECTED_GAME = "SelectedGame";
     public static final String EXTRA_SELECTED_TITLE = "SelectedTitle";
     public static final int MENU_ACTION_EDIT_CONTROLS_PLACEMENT = 0;
@@ -148,6 +151,7 @@ public final class EmulationActivity extends AppCompatActivity {
     private boolean activityRecreated;
     private String mSelectedTitle;
     private String mPath;
+    private LeiaSDK leiaSDK;
 
     public static void launch(FragmentActivity activity, String path, String title) {
         Intent launcher = new Intent(activity, EmulationActivity.class);
@@ -190,6 +194,21 @@ public final class EmulationActivity extends AppCompatActivity {
         enableFullscreenImmersive();
 
         setContentView(R.layout.activity_emulation);
+
+        // if the current renderer is lume pad 2, init the lume pad 2 leia sdk
+        try {
+            LeiaSDK.InitArgs initArgs = new LeiaSDK.InitArgs();
+            initArgs.delegate = this;
+            initArgs.platform.activity = this;
+            initArgs.platform.logLevel = LogLevel.Trace;
+            initArgs.platform.context = getApplicationContext();
+            initArgs.faceTrackingServerLogLevel = LogLevel.Trace;
+            initArgs.enableFaceTracking = true;
+            leiaSDK = LeiaSDK.createSDK(initArgs);
+        } catch (Exception e) {
+            Log.e("[EmulationActivity]", String.format("Error: %s", e.toString()));
+            e.printStackTrace();
+        }
 
         // Find or create the EmulationFragment
         mEmulationFragment = (EmulationFragment) getSupportFragmentManager()
@@ -781,6 +800,26 @@ public final class EmulationActivity extends AppCompatActivity {
 
     public boolean isActivityRecreated() {
         return activityRecreated;
+    }
+
+    @Override
+    public void didInitialize(@NonNull LeiaSDK leiaSDK) {
+
+    }
+
+    @Override
+    public void onFaceTrackingFatalError(@NonNull LeiaSDK leiaSDK) {
+
+    }
+
+    @Override
+    public void onFaceTrackingStarted(@NonNull LeiaSDK leiaSDK) {
+
+    }
+
+    @Override
+    public void onFaceTrackingStopped(@NonNull LeiaSDK leiaSDK) {
+
     }
 
     @Retention(SOURCE)
