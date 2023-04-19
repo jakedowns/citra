@@ -95,7 +95,8 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View contents = inflater.inflate(R.layout.fragment_emulation, container, false);
 
-        SurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
+        // attempting to integrate leia sdk here
+        InterlacedSurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
         surfaceView.getHolder().addCallback(this);
 
         mInputOverlay = contents.findViewById(R.id.surface_input_overlay);
