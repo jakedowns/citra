@@ -1,6 +1,7 @@
 package org.citra.citra_emu.activities;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -49,6 +50,8 @@ import org.citra.citra_emu.utils.FileBrowserHelper;
 import org.citra.citra_emu.utils.FileUtil;
 import org.citra.citra_emu.utils.ForegroundService;
 import org.citra.citra_emu.utils.ThemeUtil;
+
+import com.leia.sdk.LeiaSDK;
 
 import java.io.File;
 import java.io.IOException;
@@ -149,6 +152,18 @@ public final class EmulationActivity extends AppCompatActivity {
     private String mSelectedTitle;
     private String mPath;
 
+    // LitByLeia
+    private Boolean mPrevDesiredBacklightState = null;
+    private static LeiaSDK mLeiaSDK;
+
+    static void InitLeia(Context context) throws Exception {
+        LeiaSDK.InitArgs initArgs = new LeiaSDK.InitArgs();
+        initArgs.platform.context = context.getApplicationContext();
+        initArgs.enableFaceTracking = true;
+        initArgs.requiresFaceTrackingPermissionCheck = false;
+        mLeiaSDK = LeiaSDK.createSDK(initArgs);
+    }
+
     public static void launch(FragmentActivity activity, String path, String title) {
         Intent launcher = new Intent(activity, EmulationActivity.class);
 
@@ -209,9 +224,34 @@ public final class EmulationActivity extends AppCompatActivity {
         foregroundService = new Intent(EmulationActivity.this, ForegroundService.class);
         startForegroundService(foregroundService);
 
+        try {
+            InitLeia(this);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
         // Override Citra core INI with the one set by our in game menu
         NativeLibrary.SwapScreens(EmulationMenuSettings.getSwapScreens(),
                 getWindowManager().getDefaultDisplay().getRotation());
+    }
+
+    void Enable3D(){
+        mLeiaSDK.enableBacklight(true);
+        mLeiaSDK.enableFaceTracking(true);
+    }
+
+    void Disable3D(){
+        mLeiaSDK.enableBacklight(false);
+        mLeiaSDK.enableFaceTracking(false);
+    }
+
+    void checkShouldToggle3D(Boolean desired_state) {
+        if (desired_state) {
+            Enable3D();
+        } else {
+            Disable3D();
+        }
+        mPrevDesiredBacklightState = desired_state;
     }
 
     @Override

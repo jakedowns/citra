@@ -3,6 +3,8 @@ package org.citra.citra_emu.fragments;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.SurfaceTexture;
+import android.opengl.Matrix;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
@@ -20,6 +22,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import com.simongellis.leia.webxr.LeiaSurfaceView;
 
 import org.citra.citra_emu.NativeLibrary;
 import org.citra.citra_emu.R;
@@ -50,12 +54,19 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
 
     private Runnable perfStatsUpdater;
 
+    private static SurfaceTexture mPrerenderSurfaceTexture;
+    private static Surface mPrerenderSurface;
+
     public static EmulationFragment newInstance(String gamePath) {
         Bundle args = new Bundle();
         args.putString(KEY_GAMEPATH, gamePath);
 
         EmulationFragment fragment = new EmulationFragment();
         fragment.setArguments(args);
+
+        mPrerenderSurfaceTexture = new SurfaceTexture(0);
+        mPrerenderSurface = new Surface(mPrerenderSurfaceTexture);
+
         return fragment;
     }
 
@@ -94,8 +105,16 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View contents = inflater.inflate(R.layout.fragment_emulation, container, false);
 
-        SurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
+        // Leia Stuff
+        LeiaSurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
         surfaceView.getHolder().addCallback(this);
+
+        float[] identity = new float[16];
+        Matrix.setIdentityM(identity, 0);
+
+        // if i call this i get the following error:
+        //
+        surfaceView.addTexture(mPrerenderSurfaceTexture, identity);
 
         mInputOverlay = contents.findViewById(R.id.surface_input_overlay);
         mPerfStats = contents.findViewById(R.id.show_fps_text);
@@ -224,11 +243,20 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.debug("[EmulationFragment] Surface changed. Resolution: " + width + "x" + height);
-        mEmulationState.newSurface(holder.getSurface());
+
+        // set the texture size
+        mPrerenderSurfaceTexture.setDefaultBufferSize(width, height);
+
+        //mEmulationState.newSurface(holder.getSurface()); // old
+        mEmulationState.newSurface(mPrerenderSurface); // new: write to a prerender surface and let Leia SDK write to _this_ surface
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
+        // clean up mPreRenderSurface && mPreRenderSurfaceTexture
+        mPrerenderSurface.release();
+        mPrerenderSurfaceTexture.release();
+
         mEmulationState.clearSurface();
     }
 

@@ -1,1 +1,2 @@
+include ':leia-cnsdk'
 include ':app'
