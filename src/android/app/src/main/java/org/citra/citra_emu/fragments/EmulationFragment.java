@@ -56,6 +56,7 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
 
     private static SurfaceTexture mPrerenderSurfaceTexture;
     private static Surface mPrerenderSurface;
+    private static LeiaSurfaceView mLeiaSurfaceView;
 
     public static EmulationFragment newInstance(String gamePath) {
         Bundle args = new Bundle();
@@ -64,7 +65,7 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
         EmulationFragment fragment = new EmulationFragment();
         fragment.setArguments(args);
 
-        mPrerenderSurfaceTexture = new SurfaceTexture(0);
+        mPrerenderSurfaceTexture = new SurfaceTexture(false);
         mPrerenderSurface = new Surface(mPrerenderSurfaceTexture);
 
         return fragment;
@@ -106,15 +107,12 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
         View contents = inflater.inflate(R.layout.fragment_emulation, container, false);
 
         // Leia Stuff
-        LeiaSurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
-        surfaceView.getHolder().addCallback(this);
+        mLeiaSurfaceView = contents.findViewById(R.id.surface_emulation);
+        mLeiaSurfaceView.getHolder().addCallback(this);
 
         float[] identity = new float[16];
         Matrix.setIdentityM(identity, 0);
-
-        // if i call this i get the following error:
-        //
-        surfaceView.addTexture(mPrerenderSurfaceTexture, identity);
+        mLeiaSurfaceView.addTexture(mPrerenderSurfaceTexture, identity);
 
         mInputOverlay = contents.findViewById(R.id.surface_input_overlay);
         mPerfStats = contents.findViewById(R.id.show_fps_text);
@@ -134,6 +132,10 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     @Override
     public void onResume() {
         super.onResume();
+        mLeiaSurfaceView.onResume();
+        activity.CheckResume3D();
+
+
         Choreographer.getInstance().postFrameCallback(this);
         if (DirectoryInitialization.areCitraDirectoriesReady()) {
             mEmulationState.run(activity.isActivityRecreated());
@@ -144,6 +146,8 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
 
     @Override
     public void onPause() {
+        mLeiaSurfaceView.onPause();
+        activity.Disable3D();
         if (directoryStateReceiver != null) {
             LocalBroadcastManager.getInstance(getActivity()).unregisterReceiver(directoryStateReceiver);
             directoryStateReceiver = null;
@@ -238,6 +242,8 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     public void surfaceCreated(SurfaceHolder holder) {
         // We purposely don't do anything here.
         // All work is done in surfaceChanged, which we are guaranteed to get even for surface creation.
+
+        // what do i call here?
     }
 
     @Override
@@ -254,8 +260,8 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         // clean up mPreRenderSurface && mPreRenderSurfaceTexture
-        mPrerenderSurface.release();
-        mPrerenderSurfaceTexture.release();
+        //mPrerenderSurface.release();
+        //mPrerenderSurfaceTexture.release();
 
         mEmulationState.clearSurface();
     }

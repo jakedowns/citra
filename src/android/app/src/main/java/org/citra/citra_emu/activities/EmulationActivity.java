@@ -153,10 +153,10 @@ public final class EmulationActivity extends AppCompatActivity {
     private String mPath;
 
     // LitByLeia
-    private Boolean mPrevDesiredBacklightState = null;
+    private Boolean mPrevDesiredBacklightState = false;
     private static LeiaSDK mLeiaSDK;
 
-    static void InitLeia(Context context) throws Exception {
+    void InitLeia(Context context) throws Exception {
         LeiaSDK.InitArgs initArgs = new LeiaSDK.InitArgs();
         initArgs.platform.context = context.getApplicationContext();
         initArgs.enableFaceTracking = true;
@@ -235,17 +235,30 @@ public final class EmulationActivity extends AppCompatActivity {
                 getWindowManager().getDefaultDisplay().getRotation());
     }
 
-    void Enable3D(){
+    public void Enable3D(){
+        if(mLeiaSDK == null) return;
+        if(!mLeiaSDK.isInitialized()) return;
         mLeiaSDK.enableBacklight(true);
         mLeiaSDK.enableFaceTracking(true);
     }
 
-    void Disable3D(){
+    public void Disable3D(){
+        if(mLeiaSDK == null) return;
+        if(!mLeiaSDK.isInitialized()) return;
         mLeiaSDK.enableBacklight(false);
         mLeiaSDK.enableFaceTracking(false);
     }
 
-    void checkShouldToggle3D(Boolean desired_state) {
+    public void CheckResume3D()
+    {
+        if(mPrevDesiredBacklightState){
+            Enable3D();
+        } else {
+            Disable3D();
+        }
+    }
+
+    public void CheckResume3D(Boolean desired_state) {
         if (desired_state) {
             Enable3D();
         } else {
@@ -267,12 +280,15 @@ public final class EmulationActivity extends AppCompatActivity {
 
         // If an alert prompt was in progress when state was restored, retry displaying it
         NativeLibrary.retryDisplayAlertPrompt();
+
+        CheckResume3D();
     }
 
     @Override
     public void onRestart() {
         super.onRestart();
         NativeLibrary.ReloadCameraDevices();
+        CheckResume3D();
     }
 
     @Override
@@ -283,6 +299,7 @@ public final class EmulationActivity extends AppCompatActivity {
         updateSavestateMenuOptions(popupMenu.getMenu());
         popupMenu.setOnMenuItemClickListener(this::onOptionsItemSelected);
         popupMenu.show();
+        Disable3D();
     }
 
     @Override
@@ -318,6 +335,9 @@ public final class EmulationActivity extends AppCompatActivity {
 
     public void onEmulationStarted() {
         Toast.makeText(this, getString(R.string.emulation_menu_help), Toast.LENGTH_LONG).show();
+
+        mPrevDesiredBacklightState = true;
+        CheckResume3D();
     }
 
     private void enableFullscreenImmersive() {
@@ -503,6 +523,7 @@ public final class EmulationActivity extends AppCompatActivity {
 
             case MENU_ACTION_EXIT:
                 mEmulationFragment.stopEmulation();
+                Disable3D();
                 finish();
                 break;
 
@@ -542,10 +563,17 @@ public final class EmulationActivity extends AppCompatActivity {
                         .setPositiveButton(android.R.string.yes, (dialogInterface, i) ->
                         {
                             mEmulationFragment.stopEmulation();
+                            Disable3D();
                             finish();
                         })
-                        .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> NativeLibrary.UnPauseEmulation())
-                        .setOnCancelListener(dialogInterface -> NativeLibrary.UnPauseEmulation())
+                        .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> {
+                            NativeLibrary.UnPauseEmulation();
+                            CheckResume3D();
+                        })
+                        .setOnCancelListener((dialogInterface) -> {
+                            NativeLibrary.UnPauseEmulation();
+                            CheckResume3D();
+                        })
                         .show();
                 break;
         }
