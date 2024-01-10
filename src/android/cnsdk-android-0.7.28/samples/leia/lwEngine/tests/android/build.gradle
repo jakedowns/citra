@@ -1,0 +1,107 @@
+apply plugin: 'com.android.application'
+
+if (!isStandalone()) {
+    apply from: getRelativeRepoPath('leia/common/android/gradle/setup.gradle')
+}
+
+android {
+    namespace "com.leia.lwe.sample"
+
+    compileSdkVersion 31
+
+    defaultConfig {
+        applicationId = 'com.leia.lwe.sample'
+        minSdkVersion 30
+        targetSdkVersion 30
+
+        versionCode 1
+        versionName "0.0.1"
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_static"
+                if (isStandalone()) {
+                    arguments "-DLWE_STANDALONE=ON"
+                    arguments "-DCMAKE_PREFIX_PATH=$project.cnsdkPath"
+                    arguments "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+                } else {
+                    setDefaultCmakeArguments(arguments)
+                    if (useInAppFaceTracking()) {
+                        arguments "-DLNK_IN_APP_TRACKING=ON"
+                        arguments "-DLNK_IN_SERVICE_TRACKING=OFF"
+                    } else {
+                        arguments "-DLNK_IN_APP_TRACKING=OFF"
+                        arguments "-DLNK_IN_SERVICE_TRACKING=ON"
+                    }
+                }
+            }
+        }
+        ndk { abiFilters 'arm64-v8a' }
+
+        sourceSets {
+            main {
+                assets.srcDirs '../../assets'
+                assets.srcDirs getRelativeRepoPath('/leia/sdk/tests/assets')
+            }
+        }
+
+        packagingOptions {
+            pickFirst '**/libleiaSDK.so'
+            pickFirst '**/lib*blink.so'
+        }
+
+        if (shouldAddDebugInfo()) {
+            packagingOptions {
+                doNotStrip '**/*.so'
+
+                jniLibs {
+                    keepDebugSymbols += "**/*.so"
+                }
+            }
+
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
+        }
+
+        packagingOptions {
+            jniLibs {
+                useLegacyPackaging true
+            }
+        }
+
+        multiDexEnabled true
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        debug {
+            jniDebuggable true
+        }
+    }
+
+    ndkVersion project.ndkVersion
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version project.cmakeVersion
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.0.2'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+}
+
+addSdkDependency(dependencies, false)
+
+clean {
+    delete ".cxx"
+}
