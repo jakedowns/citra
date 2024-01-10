@@ -5,6 +5,8 @@ include_directories(.)
 
 
 
+
+
 # CMake seems to only define _DEBUG on Windows
 set_property(DIRECTORY APPEND PROPERTY
     COMPILE_DEFINITIONS $<$<CONFIG:Debug>:_DEBUG> $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
@@ -193,6 +195,7 @@ endif()
 if (ANDROID)
     add_subdirectory(android/app/src/main/jni)
     target_include_directories(citra-android PRIVATE android/app/src/main)
+    target_link_options(citra-android PRIVATE "-fuse-ld=lld")
 endif()
 
 if (ENABLE_WEB_SERVICE)
