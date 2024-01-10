@@ -1,4 +1,4 @@
-add_library(core STATIC
+add_library(citra_core STATIC
     3ds.h
     arm/arm_interface.h
     arm/dyncom/arm_dyncom.cpp
@@ -36,10 +36,10 @@ add_library(core STATIC
     core.h
     core_timing.cpp
     core_timing.h
-    custom_tex_cache.cpp
-    custom_tex_cache.h
     dumping/backend.cpp
     dumping/backend.h
+    dumping/ffmpeg_backend.cpp
+    dumping/ffmpeg_backend.h
     file_sys/archive_backend.cpp
     file_sys/archive_backend.h
     file_sys/archive_extsavedata.cpp
@@ -109,10 +109,9 @@ add_library(core STATIC
     frontend/emu_window.h
     frontend/framebuffer_layout.cpp
     frontend/framebuffer_layout.h
+    frontend/image_interface.cpp
     frontend/image_interface.h
     frontend/input.h
-    frontend/mic.cpp
-    frontend/mic.h
     gdbstub/gdbstub.cpp
     gdbstub/gdbstub.h
     gdbstub/hio.cpp
@@ -183,8 +182,8 @@ add_library(core STATIC
     hle/kernel/vm_manager.h
     hle/kernel/wait_object.cpp
     hle/kernel/wait_object.h
-    hle/lock.cpp
-    hle/lock.h
+    hle/mii.h
+    hle/mii.cpp
     hle/result.h
     hle/romfs.cpp
     hle/romfs.h
@@ -235,6 +234,8 @@ add_library(core STATIC
     hle/service/boss/boss_p.h
     hle/service/boss/boss_u.cpp
     hle/service/boss/boss_u.h
+    hle/service/boss/online_service.cpp
+    hle/service/boss/online_service.h
     hle/service/cam/cam.cpp
     hle/service/cam/cam.h
     hle/service/cam/cam_c.cpp
@@ -246,6 +247,8 @@ add_library(core STATIC
     hle/service/cam/cam_s.h
     hle/service/cam/cam_u.cpp
     hle/service/cam/cam_u.h
+    hle/service/cam/y2r_u.cpp
+    hle/service/cam/y2r_u.h
     hle/service/cecd/cecd.cpp
     hle/service/cecd/cecd.h
     hle/service/cecd/cecd_ndm.cpp
@@ -256,6 +259,8 @@ add_library(core STATIC
     hle/service/cecd/cecd_u.h
     hle/service/cfg/cfg.cpp
     hle/service/cfg/cfg.h
+    hle/service/cfg/cfg_defaults.cpp
+    hle/service/cfg/cfg_defaults.h
     hle/service/cfg/cfg_i.cpp
     hle/service/cfg/cfg_i.h
     hle/service/cfg/cfg_nor.cpp
@@ -276,8 +281,8 @@ add_library(core STATIC
     hle/service/dlp/dlp_srvr.h
     hle/service/dsp/dsp_dsp.cpp
     hle/service/dsp/dsp_dsp.h
-    hle/service/err_f.cpp
-    hle/service/err_f.h
+    hle/service/err/err_f.cpp
+    hle/service/err/err_f.h
     hle/service/frd/frd.cpp
     hle/service/frd/frd.h
     hle/service/frd/frd_a.cpp
@@ -294,8 +299,10 @@ add_library(core STATIC
     hle/service/fs/fs_user.h
     hle/service/gsp/gsp.cpp
     hle/service/gsp/gsp.h
+    hle/service/gsp/gsp_command.h
     hle/service/gsp/gsp_gpu.cpp
     hle/service/gsp/gsp_gpu.h
+    hle/service/gsp/gsp_interrupt.h
     hle/service/gsp/gsp_lcd.cpp
     hle/service/gsp/gsp_lcd.h
     hle/service/hid/hid.cpp
@@ -304,8 +311,8 @@ add_library(core STATIC
     hle/service/hid/hid_spvr.h
     hle/service/hid/hid_user.cpp
     hle/service/hid/hid_user.h
-    hle/service/http_c.cpp
-    hle/service/http_c.h
+    hle/service/http/http_c.cpp
+    hle/service/http/http_c.h
     hle/service/ir/extra_hid.cpp
     hle/service/ir/extra_hid.h
     hle/service/ir/ir.cpp
@@ -320,8 +327,8 @@ add_library(core STATIC
     hle/service/ldr_ro/cro_helper.h
     hle/service/ldr_ro/ldr_ro.cpp
     hle/service/ldr_ro/ldr_ro.h
-    hle/service/mic_u.cpp
-    hle/service/mic_u.h
+    hle/service/mic/mic_u.cpp
+    hle/service/mic/mic_u.h
     hle/service/mvd/mvd.cpp
     hle/service/mvd/mvd.h
     hle/service/mvd/mvd_std.cpp
@@ -334,10 +341,16 @@ add_library(core STATIC
     hle/service/news/news_s.h
     hle/service/news/news_u.cpp
     hle/service/news/news_u.h
+    hle/service/nfc/amiibo_crypto.cpp
+    hle/service/nfc/amiibo_crypto.h
     hle/service/nfc/nfc.cpp
     hle/service/nfc/nfc.h
+    hle/service/nfc/nfc_device.cpp
+    hle/service/nfc/nfc_device.h
     hle/service/nfc/nfc_m.cpp
     hle/service/nfc/nfc_m.h
+    hle/service/nfc/nfc_results.h
+    hle/service/nfc/nfc_types.h
     hle/service/nfc/nfc_u.cpp
     hle/service/nfc/nfc_u.h
     hle/service/nim/nim.cpp
@@ -412,24 +425,16 @@ add_library(core STATIC
     hle/service/sm/sm.h
     hle/service/sm/srv.cpp
     hle/service/sm/srv.h
-    hle/service/soc_u.cpp
-    hle/service/soc_u.h
-    hle/service/ssl_c.cpp
-    hle/service/ssl_c.h
-    hle/service/y2r_u.cpp
-    hle/service/y2r_u.h
+    hle/service/soc/soc_u.cpp
+    hle/service/soc/soc_u.h
+    hle/service/ssl/ssl_c.cpp
+    hle/service/ssl/ssl_c.h
     hw/aes/arithmetic128.cpp
     hw/aes/arithmetic128.h
     hw/aes/ccm.cpp
     hw/aes/ccm.h
     hw/aes/key.cpp
     hw/aes/key.h
-    hw/gpu.cpp
-    hw/gpu.h
-    hw/hw.cpp
-    hw/hw.h
-    hw/lcd.cpp
-    hw/lcd.h
     hw/rsa/rsa.cpp
     hw/rsa/rsa.h
     hw/y2r.cpp
@@ -446,22 +451,16 @@ add_library(core STATIC
     loader/smdh.h
     memory.cpp
     memory.h
-    mmio.h
     movie.cpp
     movie.h
+    nus_download.cpp
+    nus_download.h
     perf_stats.cpp
     perf_stats.h
     precompiled_headers.h
-    rpc/packet.cpp
-    rpc/packet.h
-    rpc/rpc_server.cpp
-    rpc/rpc_server.h
-    rpc/server.cpp
-    rpc/server.h
-    rpc/udp_server.cpp
-    rpc/udp_server.h
     savestate.cpp
     savestate.h
+    savestate_data.h
     system_titles.cpp
     system_titles.h
     telemetry_session.cpp
@@ -471,29 +470,32 @@ add_library(core STATIC
     tracer/recorder.h
 )
 
-if (ENABLE_FFMPEG_VIDEO_DUMPER)
-    target_sources(core PRIVATE
-        dumping/ffmpeg_backend.cpp
-        dumping/ffmpeg_backend.h
+create_target_directory_groups(citra_core)
+
+target_link_libraries(citra_core PUBLIC citra_common PRIVATE audio_core network video_core)
+target_link_libraries(citra_core PRIVATE Boost::boost Boost::serialization Boost::iostreams httplib)
+target_link_libraries(citra_core PUBLIC dds-ktx PRIVATE cryptopp fmt lodepng open_source_archives)
+
+if (ENABLE_WEB_SERVICE)
+    target_link_libraries(citra_core PRIVATE web_service)
+endif()
+
+if (ENABLE_SCRIPTING)
+    target_compile_definitions(citra_core PUBLIC -DENABLE_SCRIPTING)
+    target_sources(citra_core PRIVATE
+        rpc/packet.cpp
+        rpc/packet.h
+        rpc/rpc_server.cpp
+        rpc/rpc_server.h
+        rpc/server.cpp
+        rpc/server.h
+        rpc/udp_server.cpp
+        rpc/udp_server.h
     )
 endif()
 
-create_target_directory_groups(core)
-
-target_link_libraries(core PUBLIC common PRIVATE audio_core network video_core)
-target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt::fmt open_source_archives Boost::serialization Boost::iostreams)
-set_target_properties(core PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${ENABLE_LTO})
-
-if (ENABLE_WEB_SERVICE)
-    target_compile_definitions(core PRIVATE -DENABLE_WEB_SERVICE -DCPPHTTPLIB_OPENSSL_SUPPORT)
-    target_link_libraries(core PRIVATE web_service ${OPENSSL_LIBS} httplib)
-    if (ANDROID)
-        target_link_libraries(core PRIVATE ifaddrs)
-    endif()
-endif()
-
 if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
-    target_sources(core PRIVATE
+    target_sources(citra_core PRIVATE
         arm/dynarmic/arm_dynarmic.cpp
         arm/dynarmic/arm_dynarmic.h
         arm/dynarmic/arm_dynarmic_cp15.cpp
@@ -503,13 +505,9 @@ if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
         arm/dynarmic/arm_tick_counts.cpp
         arm/dynarmic/arm_tick_counts.h
     )
-    target_link_libraries(core PRIVATE dynarmic)
-endif()
-
-if (ENABLE_FFMPEG_VIDEO_DUMPER)
-    target_link_libraries(core PUBLIC FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
+    target_link_libraries(citra_core PRIVATE dynarmic)
 endif()
 
 if (CITRA_USE_PRECOMPILED_HEADERS)
-    target_precompile_headers(core PRIVATE precompiled_headers.h)
+    target_precompile_headers(citra_core PRIVATE precompiled_headers.h)
 endif()

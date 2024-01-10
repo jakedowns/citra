@@ -19,30 +19,30 @@ SERIALIZE_EXPORT_IMPL(Service::LDR::ClientSlot)
 
 namespace Service::LDR {
 
-static const ResultCode ERROR_ALREADY_INITIALIZED = // 0xD9612FF9
-    ResultCode(ErrorDescription::AlreadyInitialized, ErrorModule::RO, ErrorSummary::Internal,
-               ErrorLevel::Permanent);
-static const ResultCode ERROR_NOT_INITIALIZED = // 0xD9612FF8
-    ResultCode(ErrorDescription::NotInitialized, ErrorModule::RO, ErrorSummary::Internal,
-               ErrorLevel::Permanent);
-static const ResultCode ERROR_BUFFER_TOO_SMALL = // 0xE0E12C1F
-    ResultCode(static_cast<ErrorDescription>(31), ErrorModule::RO, ErrorSummary::InvalidArgument,
-               ErrorLevel::Usage);
-static const ResultCode ERROR_MISALIGNED_ADDRESS = // 0xD9012FF1
-    ResultCode(ErrorDescription::MisalignedAddress, ErrorModule::RO, ErrorSummary::WrongArgument,
-               ErrorLevel::Permanent);
-static const ResultCode ERROR_MISALIGNED_SIZE = // 0xD9012FF2
-    ResultCode(ErrorDescription::MisalignedSize, ErrorModule::RO, ErrorSummary::WrongArgument,
-               ErrorLevel::Permanent);
-static const ResultCode ERROR_ILLEGAL_ADDRESS = // 0xE1612C0F
-    ResultCode(static_cast<ErrorDescription>(15), ErrorModule::RO, ErrorSummary::Internal,
-               ErrorLevel::Usage);
-static const ResultCode ERROR_INVALID_MEMORY_STATE = // 0xD8A12C08
-    ResultCode(static_cast<ErrorDescription>(8), ErrorModule::RO, ErrorSummary::InvalidState,
-               ErrorLevel::Permanent);
-static const ResultCode ERROR_NOT_LOADED = // 0xD8A12C0D
-    ResultCode(static_cast<ErrorDescription>(13), ErrorModule::RO, ErrorSummary::InvalidState,
-               ErrorLevel::Permanent);
+static const Result ERROR_ALREADY_INITIALIZED = // 0xD9612FF9
+    Result(ErrorDescription::AlreadyInitialized, ErrorModule::RO, ErrorSummary::Internal,
+           ErrorLevel::Permanent);
+static const Result ERROR_NOT_INITIALIZED = // 0xD9612FF8
+    Result(ErrorDescription::NotInitialized, ErrorModule::RO, ErrorSummary::Internal,
+           ErrorLevel::Permanent);
+static const Result ERROR_BUFFER_TOO_SMALL = // 0xE0E12C1F
+    Result(static_cast<ErrorDescription>(31), ErrorModule::RO, ErrorSummary::InvalidArgument,
+           ErrorLevel::Usage);
+static const Result ERROR_MISALIGNED_ADDRESS = // 0xD9012FF1
+    Result(ErrorDescription::MisalignedAddress, ErrorModule::RO, ErrorSummary::WrongArgument,
+           ErrorLevel::Permanent);
+static const Result ERROR_MISALIGNED_SIZE = // 0xD9012FF2
+    Result(ErrorDescription::MisalignedSize, ErrorModule::RO, ErrorSummary::WrongArgument,
+           ErrorLevel::Permanent);
+static const Result ERROR_ILLEGAL_ADDRESS = // 0xE1612C0F
+    Result(static_cast<ErrorDescription>(15), ErrorModule::RO, ErrorSummary::Internal,
+           ErrorLevel::Usage);
+static const Result ERROR_INVALID_MEMORY_STATE = // 0xD8A12C08
+    Result(static_cast<ErrorDescription>(8), ErrorModule::RO, ErrorSummary::InvalidState,
+           ErrorLevel::Permanent);
+static const Result ERROR_NOT_LOADED = // 0xD8A12C0D
+    Result(static_cast<ErrorDescription>(13), ErrorModule::RO, ErrorSummary::InvalidState,
+           ErrorLevel::Permanent);
 
 static bool VerifyBufferState(Kernel::Process& process, VAddr buffer_ptr, u32 size) {
     auto vma = process.vm_manager.FindVMA(buffer_ptr);
@@ -60,7 +60,7 @@ static bool VerifyBufferState(Kernel::Process& process, VAddr buffer_ptr, u32 si
 }
 
 void RO::Initialize(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x01, 3, 2);
+    IPC::RequestParser rp(ctx);
     VAddr crs_buffer_ptr = rp.Pop<u32>();
     u32 crs_size = rp.Pop<u32>();
     VAddr crs_address = rp.Pop<u32>();
@@ -118,7 +118,7 @@ void RO::Initialize(Kernel::HLERequestContext& ctx) {
         return;
     }
 
-    ResultCode result = RESULT_SUCCESS;
+    Result result = ResultSuccess;
 
     result = process->Map(crs_address, crs_buffer_ptr, crs_size, Kernel::VMAPermission::Read, true);
     if (result.IsError()) {
@@ -139,35 +139,35 @@ void RO::Initialize(Kernel::HLERequestContext& ctx) {
 
     slot->loaded_crs = crs_address;
 
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
 }
 
 void RO::LoadCRR(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x02, 2, 2);
+    IPC::RequestParser rp(ctx);
     VAddr crr_buffer_ptr = rp.Pop<u32>();
     u32 crr_size = rp.Pop<u32>();
     auto process = rp.PopObject<Kernel::Process>();
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
 
     LOG_WARNING(Service_LDR, "(STUBBED) called, crr_buffer_ptr=0x{:08X}, crr_size=0x{:08X}",
                 crr_buffer_ptr, crr_size);
 }
 
 void RO::UnloadCRR(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x03, 1, 2);
+    IPC::RequestParser rp(ctx);
     u32 crr_buffer_ptr = rp.Pop<u32>();
     auto process = rp.PopObject<Kernel::Process>();
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
 
     LOG_WARNING(Service_LDR, "(STUBBED) called, crr_buffer_ptr=0x{:08X}", crr_buffer_ptr);
 }
 
 void RO::LoadCRO(Kernel::HLERequestContext& ctx, bool link_on_load_bug_fix) {
-    IPC::RequestParser rp(ctx, link_on_load_bug_fix ? 0x09 : 0x04, 11, 2);
+    IPC::RequestParser rp(ctx);
     VAddr cro_buffer_ptr = rp.Pop<u32>();
     VAddr cro_address = rp.Pop<u32>();
     u32 cro_size = rp.Pop<u32>();
@@ -245,13 +245,13 @@ void RO::LoadCRO(Kernel::HLERequestContext& ctx, bool link_on_load_bug_fix) {
 
     if (zero) {
         LOG_ERROR(Service_LDR, "Zero is not zero {}", zero);
-        rb.Push(ResultCode(static_cast<ErrorDescription>(29), ErrorModule::RO,
-                           ErrorSummary::Internal, ErrorLevel::Usage));
+        rb.Push(Result(static_cast<ErrorDescription>(29), ErrorModule::RO, ErrorSummary::Internal,
+                       ErrorLevel::Usage));
         rb.Push<u32>(0);
         return;
     }
 
-    ResultCode result = RESULT_SUCCESS;
+    Result result = ResultSuccess;
 
     result = process->Map(cro_address, cro_buffer_ptr, cro_size, Kernel::VMAPermission::Read, true);
     if (result.IsError()) {
@@ -330,11 +330,11 @@ void RO::LoadCRO(Kernel::HLERequestContext& ctx, bool link_on_load_bug_fix) {
     LOG_INFO(Service_LDR, "CRO \"{}\" loaded at 0x{:08X}, fixed_end=0x{:08X}", cro.ModuleName(),
              cro_address, cro_address + fix_size);
 
-    rb.Push(RESULT_SUCCESS, fix_size);
+    rb.Push(ResultSuccess, fix_size);
 }
 
 void RO::UnloadCRO(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x05, 3, 2);
+    IPC::RequestParser rp(ctx);
     VAddr cro_address = rp.Pop<u32>();
     u32 zero = rp.Pop<u32>();
     VAddr cro_buffer_ptr = rp.Pop<u32>();
@@ -372,7 +372,7 @@ void RO::UnloadCRO(Kernel::HLERequestContext& ctx) {
 
     cro.Unregister(slot->loaded_crs);
 
-    ResultCode result = cro.Unlink(slot->loaded_crs);
+    Result result = cro.Unlink(slot->loaded_crs);
     if (result.IsError()) {
         LOG_ERROR(Service_LDR, "Error unlinking CRO {:08X}", result.raw);
         rb.Push(result);
@@ -404,7 +404,7 @@ void RO::UnloadCRO(Kernel::HLERequestContext& ctx) {
 }
 
 void RO::LinkCRO(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x06, 1, 2);
+    IPC::RequestParser rp(ctx);
     VAddr cro_address = rp.Pop<u32>();
     auto process = rp.PopObject<Kernel::Process>();
 
@@ -435,7 +435,7 @@ void RO::LinkCRO(Kernel::HLERequestContext& ctx) {
 
     LOG_INFO(Service_LDR, "Linking CRO \"{}\"", cro.ModuleName());
 
-    ResultCode result = cro.Link(slot->loaded_crs, false);
+    Result result = cro.Link(slot->loaded_crs, false);
     if (result.IsError()) {
         LOG_ERROR(Service_LDR, "Error linking CRO {:08X}", result.raw);
     }
@@ -444,7 +444,7 @@ void RO::LinkCRO(Kernel::HLERequestContext& ctx) {
 }
 
 void RO::UnlinkCRO(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x07, 1, 2);
+    IPC::RequestParser rp(ctx);
     VAddr cro_address = rp.Pop<u32>();
     auto process = rp.PopObject<Kernel::Process>();
 
@@ -475,7 +475,7 @@ void RO::UnlinkCRO(Kernel::HLERequestContext& ctx) {
 
     LOG_INFO(Service_LDR, "Unlinking CRO \"{}\"", cro.ModuleName());
 
-    ResultCode result = cro.Unlink(slot->loaded_crs);
+    Result result = cro.Unlink(slot->loaded_crs);
     if (result.IsError()) {
         LOG_ERROR(Service_LDR, "Error unlinking CRO {:08X}", result.raw);
     }
@@ -484,7 +484,7 @@ void RO::UnlinkCRO(Kernel::HLERequestContext& ctx) {
 }
 
 void RO::Shutdown(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x08, 1, 2);
+    IPC::RequestParser rp(ctx);
     VAddr crs_buffer_ptr = rp.Pop<u32>();
     auto process = rp.PopObject<Kernel::Process>();
 
@@ -502,7 +502,7 @@ void RO::Shutdown(Kernel::HLERequestContext& ctx) {
     CROHelper crs(slot->loaded_crs, *process, system);
     crs.Unrebase(true);
 
-    ResultCode result = RESULT_SUCCESS;
+    Result result = ResultSuccess;
 
     result = process->Unmap(slot->loaded_crs, crs_buffer_ptr, crs.GetFileSize(),
                             Kernel::VMAPermission::ReadWrite, true);
@@ -516,15 +516,17 @@ void RO::Shutdown(Kernel::HLERequestContext& ctx) {
 
 RO::RO(Core::System& system) : ServiceFramework("ldr:ro", 2), system(system) {
     static const FunctionInfo functions[] = {
-        {0x000100C2, &RO::Initialize, "Initialize"},
-        {0x00020082, &RO::LoadCRR, "LoadCRR"},
-        {0x00030042, &RO::UnloadCRR, "UnloadCRR"},
-        {0x000402C2, &RO::LoadCRO<false>, "LoadCRO"},
-        {0x000500C2, &RO::UnloadCRO, "UnloadCRO"},
-        {0x00060042, &RO::LinkCRO, "LinkCRO"},
-        {0x00070042, &RO::UnlinkCRO, "UnlinkCRO"},
-        {0x00080042, &RO::Shutdown, "Shutdown"},
-        {0x000902C2, &RO::LoadCRO<true>, "LoadCRO_New"},
+        // clang-format off
+        {0x0001, &RO::Initialize, "Initialize"},
+        {0x0002, &RO::LoadCRR, "LoadCRR"},
+        {0x0003, &RO::UnloadCRR, "UnloadCRR"},
+        {0x0004, &RO::LoadCRO<false>, "LoadCRO"},
+        {0x0005, &RO::UnloadCRO, "UnloadCRO"},
+        {0x0006, &RO::LinkCRO, "LinkCRO"},
+        {0x0007, &RO::UnlinkCRO, "UnlinkCRO"},
+        {0x0008, &RO::Shutdown, "Shutdown"},
+        {0x0009, &RO::LoadCRO<true>, "LoadCRO_New"},
+        // clang-format on
     };
     RegisterHandlers(functions);
 }

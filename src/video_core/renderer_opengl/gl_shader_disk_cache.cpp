@@ -5,7 +5,6 @@
 #include <cstring>
 #include <fmt/format.h>
 
-#include "common/assert.h"
 #include "common/common_paths.h"
 #include "common/common_types.h"
 #include "common/file_util.h"
@@ -14,7 +13,7 @@
 #include "common/settings.h"
 #include "common/zstd_compression.h"
 #include "core/core.h"
-#include "core/hle/kernel/process.h"
+#include "core/loader/loader.h"
 #include "video_core/renderer_opengl/gl_shader_disk_cache.h"
 
 namespace OpenGL {
@@ -84,7 +83,7 @@ bool ShaderDiskCacheRaw::Save(FileUtil::IOFile& file) const {
     }
 
     // Just for future proofing, save the sizes of the array to the file
-    const std::size_t reg_array_len = Pica::Regs::NUM_REGS;
+    const std::size_t reg_array_len = Pica::RegsInternal::NUM_REGS;
     if (file.WriteObject(static_cast<u64>(reg_array_len)) != 1) {
         return false;
     }
@@ -207,6 +206,10 @@ ShaderDiskCache::LoadPrecompiledFile(FileUtil::IOFile& file, bool compressed) {
     if (compressed) {
         const std::vector<u8> decompressed =
             Common::Compression::DecompressDataZSTD(precompiled_file);
+        if (decompressed.empty()) {
+            LOG_ERROR(Render_OpenGL, "Could not decompress precompiled shader cache.");
+            return std::nullopt;
+        }
         SaveArrayToPrecompiled(decompressed.data(), decompressed.size());
     } else {
         SaveArrayToPrecompiled(precompiled_file.data(), precompiled_file.size());
@@ -298,35 +301,33 @@ std::optional<ShaderDiskCacheDecompiled> ShaderDiskCache::LoadDecompiledEntry() 
     }
 
     ShaderDiskCacheDecompiled entry;
-    entry.result.code = std::move(code);
+    entry.code = std::move(code);
     entry.sanitize_mul = sanitize_mul;
 
     return entry;
 }
 
 void ShaderDiskCache::SaveDecompiledToFile(FileUtil::IOFile& file, u64 unique_identifier,
-                                           const ShaderDecompiler::ProgramResult& result,
-                                           bool sanitize_mul) {
+                                           const std::string& code, bool sanitize_mul) {
     if (!IsUsable())
         return;
 
     if (file.WriteObject(static_cast<u32>(PrecompiledEntryKind::Decompiled)) != 1 ||
         file.WriteObject(unique_identifier) != 1 || file.WriteObject(sanitize_mul) != 1 ||
-        file.WriteObject(static_cast<u32>(result.code.size())) != 1 ||
-        file.WriteArray(result.code.data(), result.code.size()) != result.code.size()) {
+        file.WriteObject(static_cast<u32>(code.size())) != 1 ||
+        file.WriteArray(code.data(), code.size()) != code.size()) {
         LOG_ERROR(Render_OpenGL, "Failed to save decompiled cache entry - removing");
         file.Close();
         InvalidatePrecompiled();
     }
 }
 
-bool ShaderDiskCache::SaveDecompiledToCache(u64 unique_identifier,
-                                            const ShaderDecompiler::ProgramResult& result,
+bool ShaderDiskCache::SaveDecompiledToCache(u64 unique_identifier, const std::string& code,
                                             bool sanitize_mul) {
     if (!SaveObjectToPrecompiled(static_cast<u32>(PrecompiledEntryKind::Decompiled)) ||
         !SaveObjectToPrecompiled(unique_identifier) || !SaveObjectToPrecompiled(sanitize_mul) ||
-        !SaveObjectToPrecompiled(static_cast<u32>(result.code.size())) ||
-        !SaveArrayToPrecompiled(result.code.data(), result.code.size())) {
+        !SaveObjectToPrecompiled(static_cast<u32>(code.size())) ||
+        !SaveArrayToPrecompiled(code.data(), code.size())) {
         return false;
     }
 
@@ -372,10 +373,10 @@ void ShaderDiskCache::SaveRaw(const ShaderDiskCacheRaw& entry) {
         return;
     }
     transferable.insert({id, entry});
+    transferable_file.Flush();
 }
 
-void ShaderDiskCache::SaveDecompiled(u64 unique_identifier,
-                                     const ShaderDecompiler::ProgramResult& code,
+void ShaderDiskCache::SaveDecompiled(u64 unique_identifier, const std::string& code,
                                      bool sanitize_mul) {
     if (!IsUsable())
         return;
@@ -439,6 +440,8 @@ void ShaderDiskCache::SaveDumpToFile(u64 unique_identifier, GLuint program, bool
     // SaveDecompiled is used only to store the accurate multiplication setting, a better way is to
     // probably change the header in SaveDump
     SaveDecompiledToFile(precompiled_file, unique_identifier, {}, sanitize_mul);
+
+    precompiled_file.Flush();
 }
 
 bool ShaderDiskCache::IsUsable() const {
@@ -504,8 +507,8 @@ void ShaderDiskCache::SavePrecompiledHeaderToVirtualPrecompiledCache() {
 
 void ShaderDiskCache::SaveVirtualPrecompiledFile() {
     decompressed_precompiled_cache_offset = 0;
-    const std::vector<u8>& compressed = Common::Compression::CompressDataZSTDDefault(
-        decompressed_precompiled_cache.data(), decompressed_precompiled_cache.size());
+    const auto compressed =
+        Common::Compression::CompressDataZSTDDefault(decompressed_precompiled_cache);
 
     const auto precompiled_path{GetPrecompiledPath()};
 

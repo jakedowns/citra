@@ -2,11 +2,11 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <cstring>
 #include "common/archives.h"
 #include "common/logging/log.h"
 #include "core/hle/kernel/errors.h"
 #include "core/hle/kernel/memory.h"
+#include "core/hle/kernel/resource_limit.h"
 #include "core/hle/kernel/shared_memory.h"
 #include "core/memory.h"
 
@@ -15,33 +15,41 @@ SERIALIZE_EXPORT_IMPL(Kernel::SharedMemory)
 namespace Kernel {
 
 SharedMemory::SharedMemory(KernelSystem& kernel) : Object(kernel), kernel(kernel) {}
+
 SharedMemory::~SharedMemory() {
     for (const auto& interval : holding_memory) {
-        kernel.GetMemoryRegion(MemoryRegion::SYSTEM)
-            ->Free(interval.lower(), interval.upper() - interval.lower());
+        memory_region->Free(interval.lower(), interval.upper() - interval.lower());
     }
-    if (base_address != 0 && owner_process != nullptr) {
-        owner_process->vm_manager.ChangeMemoryState(base_address, size, MemoryState::Locked,
-                                                    VMAPermission::None, MemoryState::Private,
-                                                    VMAPermission::ReadWrite);
+
+    auto process = owner_process.lock();
+    if (process) {
+        process->resource_limit->Release(ResourceLimitType::SharedMemory, 1);
+        if (base_address != 0) {
+            process->vm_manager.ChangeMemoryState(base_address, size, MemoryState::Locked,
+                                                  VMAPermission::None, MemoryState::Private,
+                                                  VMAPermission::ReadWrite);
+        } else {
+            process->memory_used -= size;
+        }
     }
 }
 
 ResultVal<std::shared_ptr<SharedMemory>> KernelSystem::CreateSharedMemory(
-    Process* owner_process, u32 size, MemoryPermission permissions,
+    std::shared_ptr<Process> owner_process, u32 size, MemoryPermission permissions,
     MemoryPermission other_permissions, VAddr address, MemoryRegion region, std::string name) {
-    auto shared_memory{std::make_shared<SharedMemory>(*this)};
 
+    auto memory_region = GetMemoryRegion(region);
+    auto shared_memory = std::make_shared<SharedMemory>(*this);
     shared_memory->owner_process = owner_process;
     shared_memory->name = std::move(name);
     shared_memory->size = size;
+    shared_memory->memory_region = memory_region;
     shared_memory->permissions = permissions;
     shared_memory->other_permissions = other_permissions;
 
     if (address == 0) {
         // We need to allocate a block from the Linear Heap ourselves.
         // We'll manually allocate some memory from the linear heap in the specified region.
-        auto memory_region = GetMemoryRegion(region);
         auto offset = memory_region->LinearAllocate(size);
 
         ASSERT_MSG(offset, "Not enough space in region to allocate shared memory!");
@@ -52,16 +60,16 @@ ResultVal<std::shared_ptr<SharedMemory>> KernelSystem::CreateSharedMemory(
         shared_memory->linear_heap_phys_offset = *offset;
 
         // Increase the amount of used linear heap memory for the owner process.
-        if (shared_memory->owner_process != nullptr) {
-            shared_memory->owner_process->memory_used += size;
+        if (owner_process != nullptr) {
+            owner_process->memory_used += size;
         }
     } else {
-        auto& vm_manager = shared_memory->owner_process->vm_manager;
+        auto& vm_manager = owner_process->vm_manager;
         // The memory is already available and mapped in the owner process.
 
-        CASCADE_CODE(vm_manager.ChangeMemoryState(address, size, MemoryState::Private,
-                                                  VMAPermission::ReadWrite, MemoryState::Locked,
-                                                  SharedMemory::ConvertPermissions(permissions)));
+        R_TRY(vm_manager.ChangeMemoryState(address, size, MemoryState::Private,
+                                           VMAPermission::ReadWrite, MemoryState::Locked,
+                                           SharedMemory::ConvertPermissions(permissions)));
 
         auto backing_blocks = vm_manager.GetBackingBlocksForRange(address, size);
         ASSERT(backing_blocks.Succeeded()); // should success after verifying memory state above
@@ -69,7 +77,7 @@ ResultVal<std::shared_ptr<SharedMemory>> KernelSystem::CreateSharedMemory(
     }
 
     shared_memory->base_address = address;
-    return MakeResult(shared_memory);
+    return shared_memory;
 }
 
 std::shared_ptr<SharedMemory> KernelSystem::CreateSharedMemoryForApplet(
@@ -82,14 +90,15 @@ std::shared_ptr<SharedMemory> KernelSystem::CreateSharedMemoryForApplet(
     auto backing_blocks = memory_region->HeapAllocate(size);
     ASSERT_MSG(!backing_blocks.empty(), "Not enough space in region to allocate shared memory!");
     shared_memory->holding_memory = backing_blocks;
-    shared_memory->owner_process = nullptr;
+    shared_memory->owner_process = std::weak_ptr<Process>();
     shared_memory->name = std::move(name);
     shared_memory->size = size;
+    shared_memory->memory_region = memory_region;
     shared_memory->permissions = permissions;
     shared_memory->other_permissions = other_permissions;
     for (const auto& interval : backing_blocks) {
-        shared_memory->backing_blocks.push_back(
-            {memory.GetFCRAMRef(interval.lower()), interval.upper() - interval.lower()});
+        shared_memory->backing_blocks.emplace_back(memory.GetFCRAMRef(interval.lower()),
+                                                   interval.upper() - interval.lower());
         std::fill(memory.GetFCRAMPointer(interval.lower()),
                   memory.GetFCRAMPointer(interval.upper()), 0);
     }
@@ -98,29 +107,29 @@ std::shared_ptr<SharedMemory> KernelSystem::CreateSharedMemoryForApplet(
     return shared_memory;
 }
 
-ResultCode SharedMemory::Map(Process& target_process, VAddr address, MemoryPermission permissions,
-                             MemoryPermission other_permissions) {
+Result SharedMemory::Map(Process& target_process, VAddr address, MemoryPermission permissions,
+                         MemoryPermission other_permissions) {
 
     MemoryPermission own_other_permissions =
-        &target_process == owner_process ? this->permissions : this->other_permissions;
+        &target_process == owner_process.lock().get() ? this->permissions : this->other_permissions;
 
     // Automatically allocated memory blocks can only be mapped with other_permissions = DontCare
     if (base_address == 0 && other_permissions != MemoryPermission::DontCare) {
-        return ERR_INVALID_COMBINATION;
+        return ResultInvalidCombination;
     }
 
     // Error out if the requested permissions don't match what the creator process allows.
     if (static_cast<u32>(permissions) & ~static_cast<u32>(own_other_permissions)) {
         LOG_ERROR(Kernel, "cannot map id={}, address=0x{:08X} name={}, permissions don't match",
                   GetObjectId(), address, name);
-        return ERR_INVALID_COMBINATION;
+        return ResultInvalidCombination;
     }
 
     // Heap-backed memory blocks can not be mapped with other_permissions = DontCare
     if (base_address != 0 && other_permissions == MemoryPermission::DontCare) {
-        LOG_ERROR(Kernel, "cannot map id={}, address=0x{08X} name={}, permissions don't match",
+        LOG_ERROR(Kernel, "cannot map id={}, address=0x{:08X} name={}, permissions don't match",
                   GetObjectId(), address, name);
-        return ERR_INVALID_COMBINATION;
+        return ResultInvalidCombination;
     }
 
     // Error out if the provided permissions are not compatible with what the creator process needs.
@@ -128,12 +137,12 @@ ResultCode SharedMemory::Map(Process& target_process, VAddr address, MemoryPermi
         static_cast<u32>(this->permissions) & ~static_cast<u32>(other_permissions)) {
         LOG_ERROR(Kernel, "cannot map id={}, address=0x{:08X} name={}, permissions don't match",
                   GetObjectId(), address, name);
-        return ERR_WRONG_PERMISSION;
+        return ResultWrongPermission;
     }
 
     // TODO(Subv): Check for the Shared Device Mem flag in the creator process.
     /*if (was_created_with_shared_device_mem && address != 0) {
-        return ResultCode(ErrorDescription::InvalidCombination, ErrorModule::OS,
+        return Result(ErrorDescription::InvalidCombination, ErrorModule::OS,
     ErrorSummary::InvalidArgument, ErrorLevel::Usage);
     }*/
 
@@ -144,7 +153,7 @@ ResultCode SharedMemory::Map(Process& target_process, VAddr address, MemoryPermi
         if (address < Memory::HEAP_VADDR || address + size >= Memory::SHARED_MEMORY_VADDR_END) {
             LOG_ERROR(Kernel, "cannot map id={}, address=0x{:08X} name={}, invalid address",
                       GetObjectId(), address, name);
-            return ERR_INVALID_ADDRESS;
+            return ResultInvalidAddress;
         }
     }
 
@@ -157,14 +166,16 @@ ResultCode SharedMemory::Map(Process& target_process, VAddr address, MemoryPermi
         // APT:GetSharedFont for detail.
         target_address = linear_heap_phys_offset + Memory::LINEAR_HEAP_VADDR;
     }
-
-    auto vma = target_process.vm_manager.FindVMA(target_address);
-    if (vma->second.type != VMAType::Free ||
-        vma->second.base + vma->second.size < target_address + size) {
-        LOG_ERROR(Kernel,
-                  "cannot map id={}, address=0x{:08X} name={}, mapping to already allocated memory",
-                  GetObjectId(), address, name);
-        return ERR_INVALID_ADDRESS_STATE;
+    {
+        auto vma = target_process.vm_manager.FindVMA(target_address);
+        if (vma->second.type != VMAType::Free ||
+            vma->second.base + vma->second.size < target_address + size) {
+            LOG_ERROR(
+                Kernel,
+                "cannot map id={}, address=0x{:08X} name={}, mapping to already allocated memory",
+                GetObjectId(), address, name);
+            return ResultInvalidAddressState;
+        }
     }
 
     // Map the memory block into the target process
@@ -177,10 +188,10 @@ ResultCode SharedMemory::Map(Process& target_process, VAddr address, MemoryPermi
         interval_target += interval.second;
     }
 
-    return RESULT_SUCCESS;
+    return ResultSuccess;
 }
 
-ResultCode SharedMemory::Unmap(Process& target_process, VAddr address) {
+Result SharedMemory::Unmap(Process& target_process, VAddr address) {
     // TODO(Subv): Verify what happens if the application tries to unmap an address that is not
     // mapped to a SharedMemory.
     return target_process.vm_manager.UnmapRange(address, size);

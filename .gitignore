@@ -9,10 +9,14 @@ src/common/scm_rev.cpp
 
 # Project/editor files
 *.swp
+*.kdev4
 .idea/
 .vs/
 .vscode/
 .cache/
+.kdev4/
+cmake-build-debug/
+cmake-build-release/
 CMakeLists.txt.user*
 
 # *nix related
@@ -41,4 +45,6 @@ Thumbs.db
 repo/
 
 # GitHub Actions generated files
+.ccache/
 node_modules/
+VULKAN_SDK/

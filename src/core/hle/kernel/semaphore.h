@@ -8,13 +8,14 @@
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/export.hpp>
 #include <boost/serialization/string.hpp>
-#include <queue>
 #include "common/common_types.h"
 #include "core/hle/kernel/object.h"
 #include "core/hle/kernel/wait_object.h"
 #include "core/hle/result.h"
 
 namespace Kernel {
+
+class ResourceLimit;
 
 class Semaphore final : public WaitObject {
 public:
@@ -33,6 +34,7 @@ public:
         return HANDLE_TYPE;
     }
 
+    std::shared_ptr<ResourceLimit> resource_limit;
     s32 max_count;       ///< Maximum number of simultaneous holders the semaphore can have
     s32 available_count; ///< Number of free slots left in the semaphore
     std::string name;    ///< Name of semaphore (optional)
@@ -45,7 +47,7 @@ public:
      * @param release_count The number of slots to release
      * @return The number of free slots the semaphore had before this call
      */
-    ResultVal<s32> Release(s32 release_count);
+    Result Release(s32* out_count, s32 release_count);
 
 private:
     friend class boost::serialization::access;
@@ -55,6 +57,7 @@ private:
         ar& max_count;
         ar& available_count;
         ar& name;
+        ar& resource_limit;
     }
 };
 

@@ -17,11 +17,9 @@
 #include "core/hle/service/hid/hid.h"
 #include "core/memory.h"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace HLE::Applets {
 
-ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter const& parameter) {
+Result SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter const& parameter) {
     switch (parameter.signal) {
     case Service::APT::SignalType::Request: {
         // The LibAppJustStarted message contains a buffer with the size of the framebuffer shared
@@ -34,7 +32,7 @@ ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter
 
         using Kernel::MemoryPermission;
         // Create a SharedMemory that directly points to this heap block.
-        framebuffer_memory = Core::System::GetInstance().Kernel().CreateSharedMemoryForApplet(
+        framebuffer_memory = system.Kernel().CreateSharedMemoryForApplet(
             0, capture_info.size, MemoryPermission::ReadWrite, MemoryPermission::ReadWrite,
             "SoftwareKeyboard Memory");
 
@@ -46,7 +44,7 @@ ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter
             .object = framebuffer_memory,
         });
 
-        return RESULT_SUCCESS;
+        return ResultSuccess;
     }
 
     case Service::APT::SignalType::Message: {
@@ -60,7 +58,7 @@ ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter
         case SoftwareKeyboardCallbackResult::OK:
             // Finish execution
             Finalize();
-            return RESULT_SUCCESS;
+            return ResultSuccess;
 
         case SoftwareKeyboardCallbackResult::Close:
             // Let the frontend display error and quit
@@ -68,14 +66,14 @@ ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter
             config.return_code = SoftwareKeyboardResult::BannedInput;
             config.text_offset = config.text_length = 0;
             Finalize();
-            return RESULT_SUCCESS;
+            return ResultSuccess;
 
         case SoftwareKeyboardCallbackResult::Continue:
             // Let the frontend display error and get input again
             // The input will be sent for validation again on next Update().
             frontend_applet->ShowError(Common::UTF16BufferToUTF8(config.callback_msg));
             frontend_applet->Execute(ToFrontendConfig(config));
-            return RESULT_SUCCESS;
+            return ResultSuccess;
 
         default:
             UNREACHABLE();
@@ -86,27 +84,27 @@ ResultCode SoftwareKeyboard::ReceiveParameterImpl(Service::APT::MessageParameter
         LOG_ERROR(Service_APT, "unsupported signal {}", parameter.signal);
         UNIMPLEMENTED();
         // TODO(Subv): Find the right error code
-        return ResultCode(-1);
+        return ResultUnknown;
     }
     }
 }
 
-ResultCode SoftwareKeyboard::Start(Service::APT::MessageParameter const& parameter) {
+Result SoftwareKeyboard::Start(Service::APT::MessageParameter const& parameter) {
     ASSERT_MSG(parameter.buffer.size() == sizeof(config),
                "The size of the parameter (SoftwareKeyboardConfig) is wrong");
 
-    memcpy(&config, parameter.buffer.data(), parameter.buffer.size());
+    std::memcpy(&config, parameter.buffer.data(), parameter.buffer.size());
     text_memory = std::static_pointer_cast<Kernel::SharedMemory, Kernel::Object>(parameter.object);
 
     DrawScreenKeyboard();
 
     using namespace Frontend;
-    frontend_applet = Core::System::GetInstance().GetSoftwareKeyboard();
+    frontend_applet = system.GetSoftwareKeyboard();
     ASSERT(frontend_applet);
 
     frontend_applet->Execute(ToFrontendConfig(config));
 
-    return RESULT_SUCCESS;
+    return ResultSuccess;
 }
 
 void SoftwareKeyboard::Update() {
@@ -117,7 +115,7 @@ void SoftwareKeyboard::Update() {
     const KeyboardData& data = frontend_applet->ReceiveData();
     std::u16string text = Common::UTF8ToUTF16(data.text);
     // Include a null terminator
-    memcpy(text_memory->GetPointer(), text.c_str(), (text.length() + 1) * sizeof(char16_t));
+    std::memcpy(text_memory->GetPointer(), text.c_str(), (text.length() + 1) * sizeof(char16_t));
     switch (config.num_buttons_m1) {
     case SoftwareKeyboardButtonConfig::SingleButton:
         config.return_code = SoftwareKeyboardResult::D0Click;
@@ -168,12 +166,12 @@ void SoftwareKeyboard::DrawScreenKeyboard() {
     // TODO(Subv): Draw the HLE keyboard, for now just do nothing
 }
 
-ResultCode SoftwareKeyboard::Finalize() {
+Result SoftwareKeyboard::Finalize() {
     std::vector<u8> buffer(sizeof(SoftwareKeyboardConfig));
     std::memcpy(buffer.data(), &config, buffer.size());
     CloseApplet(nullptr, buffer);
     text_memory = nullptr;
-    return RESULT_SUCCESS;
+    return ResultSuccess;
 }
 
 Frontend::KeyboardConfig SoftwareKeyboard::ToFrontendConfig(

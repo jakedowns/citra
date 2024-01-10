@@ -31,8 +31,8 @@ Directory::Directory(std::unique_ptr<FileSys::DirectoryBackend>&& backend,
 Directory::Directory() : ServiceFramework("", 1), path(""), backend(nullptr) {
     static const FunctionInfo functions[] = {
         // clang-format off
-        {0x08010042, &Directory::Read, "Read"},
-        {0x08020000, &Directory::Close, "Close"},
+        {0x0801, &Directory::Read, "Read"},
+        {0x0802, &Directory::Close, "Close"},
         // clang-format on
     };
     RegisterHandlers(functions);
@@ -41,7 +41,7 @@ Directory::Directory() : ServiceFramework("", 1), path(""), backend(nullptr) {
 Directory::~Directory() {}
 
 void Directory::Read(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x0801, 1, 2);
+    IPC::RequestParser rp(ctx);
     u32 count = rp.Pop<u32>();
     auto& buffer = rp.PopMappedBuffer();
     std::vector<FileSys::Entry> entries(count);
@@ -51,18 +51,18 @@ void Directory::Read(Kernel::HLERequestContext& ctx) {
     buffer.Write(entries.data(), 0, read * sizeof(FileSys::Entry));
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 2);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
     rb.Push(read);
     rb.PushMappedBuffer(buffer);
 }
 
 void Directory::Close(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x0802, 0, 0);
+    IPC::RequestParser rp(ctx);
     LOG_TRACE(Service_FS, "Close {}", GetName());
     backend->Close();
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
 }
 
 } // namespace Service::FS

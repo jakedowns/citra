@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <span>
 #include <vector>
 #include <boost/serialization/export.hpp>
 #include <boost/serialization/shared_ptr.hpp>
@@ -22,7 +23,7 @@ public:
 
 private:
     template <class Archive>
-    void serialize(Archive& ar, const unsigned int) {}
+    void serialize(Archive&, const unsigned int) {}
     friend class boost::serialization::access;
 };
 
@@ -103,6 +104,16 @@ public:
 
     const u8* GetPtr() const {
         return cptr;
+    }
+
+    std::span<u8> GetWriteBytes(std::size_t size) {
+        return std::span{cptr, std::min(size, csize)};
+    }
+
+    template <typename T>
+    std::span<const T> GetReadBytes(std::size_t size) const {
+        const auto* cptr_t = reinterpret_cast<T*>(cptr);
+        return std::span{cptr_t, std::min(size, csize) / sizeof(T)};
     }
 
     std::size_t GetSize() const {

@@ -217,6 +217,8 @@ public:
     u32 memory_used = 0;
 
     std::shared_ptr<MemoryRegionInfo> memory_region = nullptr;
+    MemoryRegionInfo::IntervalSet holding_memory;
+    MemoryRegionInfo::IntervalSet holding_tls_memory;
 
     /// The Thread Local Storage area is allocated as processes create threads,
     /// each TLS area is 0x200 bytes, so one page (0x1000) is split up in 8 parts, and each part
@@ -229,26 +231,30 @@ public:
     VAddr GetLinearHeapBase() const;
     VAddr GetLinearHeapLimit() const;
 
-    ResultVal<VAddr> HeapAllocate(VAddr target, u32 size, VMAPermission perms,
-                                  MemoryState memory_state = MemoryState::Private,
-                                  bool skip_range_check = false);
-    ResultCode HeapFree(VAddr target, u32 size);
+    Result HeapAllocate(VAddr* out_addr, VAddr target, u32 size, VMAPermission perms,
+                        MemoryState memory_state = MemoryState::Private,
+                        bool skip_range_check = false);
+    Result HeapFree(VAddr target, u32 size);
 
-    ResultVal<VAddr> LinearAllocate(VAddr target, u32 size, VMAPermission perms);
-    ResultCode LinearFree(VAddr target, u32 size);
+    Result LinearAllocate(VAddr* out_addr, VAddr target, u32 size, VMAPermission perms);
+    Result LinearFree(VAddr target, u32 size);
 
-    ResultCode Map(VAddr target, VAddr source, u32 size, VMAPermission perms,
-                   bool privileged = false);
-    ResultCode Unmap(VAddr target, VAddr source, u32 size, VMAPermission perms,
-                     bool privileged = false);
+    ResultVal<VAddr> AllocateThreadLocalStorage();
+
+    Result Map(VAddr target, VAddr source, u32 size, VMAPermission perms, bool privileged = false);
+    Result Unmap(VAddr target, VAddr source, u32 size, VMAPermission perms,
+                 bool privileged = false);
 
 private:
+    void FreeAllMemory();
+
     KernelSystem& kernel;
 
     friend class boost::serialization::access;
     template <class Archive>
     void serialize(Archive& ar, const unsigned int file_version);
 };
+
 } // namespace Kernel
 
 BOOST_CLASS_EXPORT_KEY(Kernel::CodeSet)

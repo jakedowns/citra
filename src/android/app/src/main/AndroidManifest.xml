@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.citra.citra_emu">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false"/>
@@ -30,6 +29,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name="org.citra.citra_emu.CitraApplication"
@@ -44,8 +45,7 @@
         <activity
             android:name="org.citra.citra_emu.ui.main.MainActivity"
             android:theme="@style/Theme.Citra.Splash.Main"
-            android:exported="true"
-            android:resizeableActivity="false">
+            android:exported="true">
 
             <!-- This intentfilter marks this Activity as the one that gets launched from Home screen. -->
             <intent-filter>
@@ -63,25 +63,29 @@
 
         <activity
             android:name="org.citra.citra_emu.activities.EmulationActivity"
-            android:resizeableActivity="false"
+            android:exported="true"
             android:theme="@style/Theme.Citra.Main"
-            android:launchMode="singleTop"/>
+            android:launchMode="singleTop">
 
-        <service android:name="org.citra.citra_emu.utils.ForegroundService"/>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:mimeType="application/octet-stream"
+                    android:scheme="content" />
+            </intent-filter>
+
+        </activity>
+
+        <service android:name="org.citra.citra_emu.utils.ForegroundService" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keep emulation running in background"/>
+        </service>
 
         <activity
             android:name="org.citra.citra_emu.features.cheats.ui.CheatsActivity"
             android:exported="false"
             android:theme="@style/Theme.Citra.Main"
             android:label="@string/cheats"/>
-
-
-        <provider
-            android:name="org.citra.citra_emu.model.GameProvider"
-            android:authorities="${applicationId}.provider"
-            android:enabled="true"
-            android:exported="false">
-        </provider>
     </application>
 
 </manifest>

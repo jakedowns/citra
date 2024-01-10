@@ -10,16 +10,13 @@
 #include "core/file_sys/ncch_container.h"
 #include "core/loader/loader.h"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Loader namespace
-
 namespace Loader {
 
 /// Loads an NCCH file (e.g. from a CCI, or the first NCCH in a CXI)
 class AppLoader_NCCH final : public AppLoader {
 public:
-    AppLoader_NCCH(FileUtil::IOFile&& file, const std::string& filepath)
-        : AppLoader(std::move(file)), base_ncch(filepath), overlay_ncch(&base_ncch),
+    AppLoader_NCCH(Core::System& system_, FileUtil::IOFile&& file, const std::string& filepath)
+        : AppLoader(system_, std::move(file)), base_ncch(filepath), overlay_ncch(&base_ncch),
           filepath(filepath) {}
 
     /**
@@ -33,15 +30,22 @@ public:
         return IdentifyType(file);
     }
 
+    [[nodiscard]] std::span<const u32> GetPreferredRegions() const override {
+        return preferred_regions;
+    }
+
     ResultStatus Load(std::shared_ptr<Kernel::Process>& process) override;
+
+    std::pair<std::optional<u32>, ResultStatus> LoadCoreVersion() override;
 
     /**
      * Loads the Exheader and returns the system mode for this application.
      * @returns A pair with the optional system mode, and and the status.
      */
-    std::pair<std::optional<u32>, ResultStatus> LoadKernelSystemMode() override;
+    std::pair<std::optional<Kernel::MemoryMode>, ResultStatus> LoadKernelMemoryMode() override;
 
-    std::pair<std::optional<u8>, ResultStatus> LoadKernelN3dsMode() override;
+    std::pair<std::optional<Kernel::New3dsHwCapabilities>, ResultStatus> LoadNew3dsHwCapabilities()
+        override;
 
     ResultStatus IsExecutable(bool& out_executable) override;
 
@@ -81,11 +85,13 @@ private:
     void ParseRegionLockoutInfo(u64 program_id);
 
     /// Detects whether the NCCH contains GBA Virtual Console.
-    bool IsGbaVirtualConsole(const std::vector<u8>& code);
+    bool IsGbaVirtualConsole(std::span<const u8> code);
 
     FileSys::NCCHContainer base_ncch;
     FileSys::NCCHContainer update_ncch;
     FileSys::NCCHContainer* overlay_ncch;
+
+    std::vector<u32> preferred_regions;
 
     std::string filepath;
 };

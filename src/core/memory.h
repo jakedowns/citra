@@ -10,12 +10,13 @@
 #include <boost/serialization/vector.hpp>
 #include "common/common_types.h"
 #include "common/memory_ref.h"
-#include "core/mmio.h"
-
-class ARM_Interface;
 
 namespace Kernel {
 class Process;
+}
+
+namespace Core {
+class System;
 }
 
 namespace AudioCore {
@@ -41,23 +42,6 @@ enum class PageType {
     /// Page is mapped to regular memory, but also needs to check for rasterizer cache flushing and
     /// invalidation
     RasterizerCachedMemory,
-    /// Page is mapped to a I/O region. Writing and reading to this page is handled by functions.
-    Special,
-};
-
-struct SpecialRegion {
-    VAddr base;
-    u32 size;
-    MMIORegionPointer handler;
-
-private:
-    template <class Archive>
-    void serialize(Archive& ar, const unsigned int file_version) {
-        ar& base;
-        ar& size;
-        ar& handler;
-    }
-    friend class boost::serialization::access;
 };
 
 /**
@@ -107,12 +91,6 @@ struct PageTable {
     Pointers pointers;
 
     /**
-     * Contains MMIO handlers that back memory regions whose entries in the `attribute` array is of
-     * type `Special`.
-     */
-    std::vector<SpecialRegion> special_regions;
-
-    /**
      * Array of fine grained page attributes. If it is set to any value other than `Memory`, then
      * the corresponding entry in `pointers` MUST be set to null.
      */
@@ -128,7 +106,6 @@ private:
     template <class Archive>
     void serialize(Archive& ar, const unsigned int) {
         ar& pointers.refs;
-        ar& special_regions;
         ar& attributes;
         for (std::size_t i = 0; i < PAGE_TABLE_NUM_ENTRIES; i++) {
             pointers.raw[i] = pointers.refs[i].GetPtr();
@@ -249,21 +226,6 @@ enum : VAddr {
     PLUGIN_3GX_FB_VADDR_END = PLUGIN_3GX_FB_VADDR + PLUGIN_3GX_FB_SIZE
 };
 
-/**
- * Flushes any externally cached rasterizer resources touching the given region.
- */
-void RasterizerFlushRegion(PAddr start, u32 size);
-
-/**
- * Invalidates any externally cached rasterizer resources touching the given region.
- */
-void RasterizerInvalidateRegion(PAddr start, u32 size);
-
-/**
- * Flushes and invalidates any externally cached rasterizer resources touching the given region.
- */
-void RasterizerFlushAndInvalidateRegion(PAddr start, u32 size);
-
 enum class FlushMode {
     /// Write back modified surfaces to RAM
     Flush,
@@ -273,21 +235,9 @@ enum class FlushMode {
     FlushAndInvalidate,
 };
 
-/**
- * Flushes and invalidates all memory in the rasterizer cache and removes any leftover state
- * If flush is true, the rasterizer should flush any cached resources to RAM before clearing
- */
-void RasterizerClearAll(bool flush);
-
-/**
- * Flushes and invalidates any externally cached rasterizer resources touching the given virtual
- * address region.
- */
-void RasterizerFlushVirtualRegion(VAddr start, u32 size, FlushMode mode);
-
 class MemorySystem {
 public:
-    MemorySystem();
+    explicit MemorySystem(Core::System& system);
     ~MemorySystem();
 
     /**
@@ -299,15 +249,6 @@ public:
      * @param target Buffer with the memory backing the mapping. Must be of length at least `size`.
      */
     void MapMemoryRegion(PageTable& page_table, VAddr base, u32 size, MemoryRef target);
-
-    /**
-     * Maps a region of the emulated process address space as a IO region.
-     * @param page_table The page table of the emulated process.
-     * @param base The address to start mapping at. Must be page-aligned.
-     * @param size The amount of bytes to map. Must be page-aligned.
-     * @param mmio_handler The handler that backs the mapping.
-     */
-    void MapIoRegion(PageTable& page_table, VAddr base, u32 size, MMIORegionPointer mmio_handler);
 
     void UnmapRegion(PageTable& page_table, VAddr base, u32 size);
 
@@ -575,8 +516,11 @@ public:
      */
     void RasterizerMarkRegionCached(PAddr start, u32 size, bool cached);
 
+    /// For a rasterizer-accessible PAddr, gets a list of all possible VAddr
+    std::vector<VAddr> PhysicalToVirtualAddressForRasterizer(PAddr addr);
+
     /// Gets a pointer to the memory region beginning at the specified physical address.
-    u8* GetPhysicalPointer(PAddr address);
+    u8* GetPhysicalPointer(PAddr address) const;
 
     /// Returns a reference to the memory region beginning at the specified physical address
     MemoryRef GetPhysicalRef(PAddr address) const;
@@ -607,6 +551,8 @@ public:
 
     void SetDSP(AudioCore::DspInterface& dsp);
 
+    void RasterizerFlushVirtualRegion(VAddr start, u32 size, FlushMode mode);
+
 private:
     template <typename T>
     T Read(const VAddr vaddr);
@@ -627,6 +573,7 @@ private:
 
     void MapPages(PageTable& page_table, u32 base, u32 size, MemoryRef memory, PageType type);
 
+private:
     class Impl;
     std::unique_ptr<Impl> impl;
 

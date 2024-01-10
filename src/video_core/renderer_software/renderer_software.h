@@ -11,15 +11,26 @@ namespace Core {
 class System;
 }
 
-namespace VideoCore {
+namespace SwRenderer {
+
+struct ScreenInfo {
+    u32 width;
+    u32 height;
+    std::vector<u8> pixels;
+};
 
 class RendererSoftware : public VideoCore::RendererBase {
 public:
-    explicit RendererSoftware(Core::System& system, Frontend::EmuWindow& window);
+    explicit RendererSoftware(Core::System& system, Pica::PicaCore& pica,
+                              Frontend::EmuWindow& window);
     ~RendererSoftware() override;
 
-    [[nodiscard]] VideoCore::RasterizerInterface* Rasterizer() const override {
-        return rasterizer.get();
+    [[nodiscard]] VideoCore::RasterizerInterface* Rasterizer() override {
+        return &rasterizer;
+    }
+
+    [[nodiscard]] const ScreenInfo& Screen(VideoCore::ScreenId id) const noexcept {
+        return screen_infos[static_cast<u32>(id)];
     }
 
     void SwapBuffers() override;
@@ -27,7 +38,14 @@ public:
     void Sync() override {}
 
 private:
-    std::unique_ptr<RasterizerSoftware> rasterizer;
+    void PrepareRenderTarget();
+    void LoadFBToScreenInfo(int i);
+
+private:
+    Memory::MemorySystem& memory;
+    Pica::PicaCore& pica;
+    RasterizerSoftware rasterizer;
+    std::array<ScreenInfo, 3> screen_infos{};
 };
 
-} // namespace VideoCore
+} // namespace SwRenderer

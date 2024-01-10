@@ -162,7 +162,7 @@ ConfigureInput::ConfigureInput(QWidget* parent)
         ui->buttonDpadUp, ui->buttonDpadDown, ui->buttonDpadLeft, ui->buttonDpadRight,
         ui->buttonL,      ui->buttonR,        ui->buttonStart,    ui->buttonSelect,
         ui->buttonDebug,  ui->buttonGpio14,   ui->buttonZL,       ui->buttonZR,
-        ui->buttonHome,
+        ui->buttonHome,   ui->buttonPower,
     };
 
     analog_map_buttons = {{
@@ -579,7 +579,7 @@ void ConfigureInput::AutoMap() {
 void ConfigureInput::HandleClick(QPushButton* button,
                                  std::function<void(const Common::ParamPackage&)> new_input_setter,
                                  InputCommon::Polling::DeviceType type) {
-    previous_key_code = QKeySequence(button->text())[0];
+    previous_key_code = QKeySequence(button->text())[0].toCombined();
     button->setText(tr("[press key]"));
     button->setFocus();
 

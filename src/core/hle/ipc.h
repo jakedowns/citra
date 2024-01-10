@@ -20,8 +20,8 @@ constexpr std::size_t MAX_STATIC_BUFFERS = 16;
 // These errors are commonly returned by invalid IPC translations, so alias them here for
 // convenience.
 // TODO(yuriks): These will probably go away once translation is implemented inside the kernel.
-using Kernel::ERR_INVALID_BUFFER_DESCRIPTOR;
-constexpr auto ERR_INVALID_HANDLE = Kernel::ERR_INVALID_HANDLE_OS;
+using Kernel::ResultInvalidBufferDescriptor;
+constexpr auto ResultInvalidHandle = Kernel::ResultInvalidHandleOs;
 
 enum DescriptorType : u32 {
     // Buffer related descriptors types (mask : 0x0F)
@@ -56,8 +56,7 @@ union Header {
  * @note While @p normal_params_size is equivalent to the number of normal parameters,
  * @p translate_params_size includes the size occupied by the translate parameters headers.
  */
-inline u32 MakeHeader(u16 command_id, unsigned int normal_params_size,
-                      unsigned int translate_params_size) {
+inline constexpr u32 MakeHeader(u16 command_id, u32 normal_params_size, u32 translate_params_size) {
     Header header{};
     header.command_id.Assign(command_id);
     header.normal_params_size.Assign(normal_params_size);

@@ -2,10 +2,9 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <fmt/format.h>
 #include "common/alignment.h"
 #include "common/settings.h"
-#include "common/string_util.h"
-#include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/service/ir/extra_hid.h"
 #include "core/movie.h"
@@ -64,7 +63,8 @@ enum class ResponseID : u8 {
     ReadCalibrationData = 0x11,
 };
 
-ExtraHID::ExtraHID(SendFunc send_func, Core::Timing& timing) : IRDevice(send_func), timing(timing) {
+ExtraHID::ExtraHID(SendFunc send_func, Core::Timing& timing_, Core::Movie& movie_)
+    : IRDevice(send_func), timing{timing_}, movie{movie_} {
     LoadInputDevices();
 
     // The data below was retrieved from a New 3DS
@@ -163,7 +163,7 @@ void ExtraHID::OnDisconnect() {
     timing.UnscheduleEvent(hid_polling_callback_id, 0);
 }
 
-void ExtraHID::HandleConfigureHIDPollingRequest(const std::vector<u8>& request) {
+void ExtraHID::HandleConfigureHIDPollingRequest(std::span<const u8> request) {
     if (request.size() != 3) {
         LOG_ERROR(Service_IR, "Wrong request size ({}): {}", request.size(),
                   fmt::format("{:02x}", fmt::join(request, " ")));
@@ -176,7 +176,7 @@ void ExtraHID::HandleConfigureHIDPollingRequest(const std::vector<u8>& request) 
     timing.ScheduleEvent(msToCycles(hid_period), hid_polling_callback_id);
 }
 
-void ExtraHID::HandleReadCalibrationDataRequest(const std::vector<u8>& request_buf) {
+void ExtraHID::HandleReadCalibrationDataRequest(std::span<const u8> request_buf) {
     struct ReadCalibrationDataRequest {
         RequestID request_id;
         u8 expected_response_time;
@@ -204,16 +204,15 @@ void ExtraHID::HandleReadCalibrationDataRequest(const std::vector<u8>& request_b
         return;
     }
 
-    std::vector<u8> response(5);
+    std::vector<u8> response(5 + size);
     response[0] = static_cast<u8>(ResponseID::ReadCalibrationData);
     std::memcpy(&response[1], &request.offset, sizeof(request.offset));
     std::memcpy(&response[3], &request.size, sizeof(request.size));
-    response.insert(response.end(), calibration_data.begin() + offset,
-                    calibration_data.begin() + offset + size);
+    std::memcpy(&response[5], calibration_data.data() + offset, size);
     Send(response);
 }
 
-void ExtraHID::OnReceive(const std::vector<u8>& data) {
+void ExtraHID::OnReceive(std::span<const u8> data) {
     switch (static_cast<RequestID>(data[0])) {
     case RequestID::ConfigureHIDPolling:
         HandleConfigureHIDPollingRequest(data);
@@ -239,7 +238,7 @@ void ExtraHID::SendHIDStatus() {
     float x, y;
     std::tie(x, y) = c_stick->GetStatus();
 
-    ExtraHIDResponse response;
+    ExtraHIDResponse response{};
     response.c_stick.header.Assign(static_cast<u8>(ResponseID::PollHID));
     response.c_stick.c_stick_x.Assign(static_cast<u32>(C_STICK_CENTER + C_STICK_RADIUS * x));
     response.c_stick.c_stick_y.Assign(static_cast<u32>(C_STICK_CENTER + C_STICK_RADIUS * y));
@@ -249,7 +248,7 @@ void ExtraHID::SendHIDStatus() {
     response.buttons.r_not_held.Assign(1);
     response.unknown = 0;
 
-    Core::Movie::GetInstance().HandleExtraHidResponse(response);
+    movie.HandleExtraHidResponse(response);
 
     std::vector<u8> response_buffer(sizeof(response));
     memcpy(response_buffer.data(), &response, sizeof(response));

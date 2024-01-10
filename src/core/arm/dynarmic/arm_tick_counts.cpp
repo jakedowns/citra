@@ -13,8 +13,8 @@ namespace {
 template <Common::StringLiteral haystack, Common::StringLiteral needle>
 constexpr u32 GetMatchingBitsFromStringLiteral() {
     u32 result = 0;
-    for (size_t i = 0; i < haystack.strlen; i++) {
-        for (size_t a = 0; a < needle.strlen; a++) {
+    for (std::size_t i = 0; i < haystack.strlen; i++) {
+        for (std::size_t a = 0; a < needle.strlen; a++) {
             if (haystack.value[i] == needle.value[a]) {
                 result |= 1 << (haystack.strlen - 1 - i);
             }
@@ -28,8 +28,9 @@ constexpr u32 DepositBits(u32 val) {
     u32 mask = mask_;
     u32 res = 0;
     for (u32 bb = 1; mask; bb += bb) {
+        u32 neg_mask = 0 - mask;
         if (val & bb)
-            res |= mask & -mask;
+            res |= mask & neg_mask;
         mask &= mask - 1;
     }
     return res;

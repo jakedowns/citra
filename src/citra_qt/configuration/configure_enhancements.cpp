@@ -8,14 +8,10 @@
 #include "common/settings.h"
 #include "ui_configure_enhancements.h"
 #include "video_core/renderer_opengl/post_processing_opengl.h"
-#include "video_core/renderer_opengl/texture_filters/texture_filterer.h"
 
 ConfigureEnhancements::ConfigureEnhancements(QWidget* parent)
     : QWidget(parent), ui(std::make_unique<Ui::ConfigureEnhancements>()) {
     ui->setupUi(this);
-
-    for (const auto& filter : OpenGL::TextureFilterer::GetFilterNames())
-        ui->texture_filter_combobox->addItem(QString::fromStdString(filter.data()));
 
     SetupPerGameUI();
     SetConfiguration();
@@ -26,8 +22,7 @@ ConfigureEnhancements::ConfigureEnhancements(QWidget* parent)
     const bool res_scale_enabled = graphics_api != Settings::GraphicsAPI::Software;
     ui->resolution_factor_combobox->setEnabled(res_scale_enabled);
 
-    connect(ui->render_3d_combobox,
-            static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+    connect(ui->render_3d_combobox, qOverload<int>(&QComboBox::currentIndexChanged), this,
             [this](int currentIndex) {
                 updateShaders(static_cast<Settings::StereoRenderOption>(currentIndex));
             });
@@ -45,8 +40,10 @@ ConfigureEnhancements::ConfigureEnhancements(QWidget* parent)
     });
 
     ui->toggle_preload_textures->setEnabled(ui->toggle_custom_textures->isChecked());
+    ui->toggle_async_custom_loading->setEnabled(ui->toggle_custom_textures->isChecked());
     connect(ui->toggle_custom_textures, &QCheckBox::toggled, this, [this] {
         ui->toggle_preload_textures->setEnabled(ui->toggle_custom_textures->isChecked());
+        ui->toggle_async_custom_loading->setEnabled(ui->toggle_custom_textures->isChecked());
         if (!ui->toggle_preload_textures->isEnabled())
             ui->toggle_preload_textures->setChecked(false);
     });
@@ -60,9 +57,9 @@ void ConfigureEnhancements::SetConfiguration() {
         ConfigurationShared::SetPerGameSetting(ui->resolution_factor_combobox,
                                                &Settings::values.resolution_factor);
         ConfigurationShared::SetPerGameSetting(ui->texture_filter_combobox,
-                                               &Settings::values.texture_filter_name);
+                                               &Settings::values.texture_filter);
         ConfigurationShared::SetHighlight(ui->widget_texture_filter,
-                                          !Settings::values.texture_filter_name.UsingGlobal());
+                                          !Settings::values.texture_filter.UsingGlobal());
         ConfigurationShared::SetPerGameSetting(ui->layout_combobox,
                                                &Settings::values.layout_option);
     } else {
@@ -70,13 +67,8 @@ void ConfigureEnhancements::SetConfiguration() {
             Settings::values.resolution_factor.GetValue());
         ui->layout_combobox->setCurrentIndex(
             static_cast<int>(Settings::values.layout_option.GetValue()));
-        int tex_filter_idx = ui->texture_filter_combobox->findText(
-            QString::fromStdString(Settings::values.texture_filter_name.GetValue()));
-        if (tex_filter_idx == -1) {
-            ui->texture_filter_combobox->setCurrentIndex(0);
-        } else {
-            ui->texture_filter_combobox->setCurrentIndex(tex_filter_idx);
-        }
+        ui->texture_filter_combobox->setCurrentIndex(
+            static_cast<int>(Settings::values.texture_filter.GetValue()));
     }
 
     ui->render_3d_combobox->setCurrentIndex(
@@ -92,6 +84,7 @@ void ConfigureEnhancements::SetConfiguration() {
     ui->toggle_dump_textures->setChecked(Settings::values.dump_textures.GetValue());
     ui->toggle_custom_textures->setChecked(Settings::values.custom_textures.GetValue());
     ui->toggle_preload_textures->setChecked(Settings::values.preload_textures.GetValue());
+    ui->toggle_async_custom_loading->setChecked(Settings::values.async_custom_loading.GetValue());
     bg_color =
         QColor::fromRgbF(Settings::values.bg_red.GetValue(), Settings::values.bg_green.GetValue(),
                          Settings::values.bg_blue.GetValue());
@@ -155,9 +148,8 @@ void ConfigureEnhancements::ApplyConfiguration() {
 
     ConfigurationShared::ApplyPerGameSetting(&Settings::values.filter_mode,
                                              ui->toggle_linear_filter, linear_filter);
-    ConfigurationShared::ApplyPerGameSetting(
-        &Settings::values.texture_filter_name, ui->texture_filter_combobox,
-        [this](int index) { return ui->texture_filter_combobox->itemText(index).toStdString(); });
+    ConfigurationShared::ApplyPerGameSetting(&Settings::values.texture_filter,
+                                             ui->texture_filter_combobox);
     ConfigurationShared::ApplyPerGameSetting(&Settings::values.layout_option, ui->layout_combobox);
     ConfigurationShared::ApplyPerGameSetting(&Settings::values.swap_screen, ui->toggle_swap_screen,
                                              swap_screen);
@@ -169,6 +161,8 @@ void ConfigureEnhancements::ApplyConfiguration() {
                                              ui->toggle_custom_textures, custom_textures);
     ConfigurationShared::ApplyPerGameSetting(&Settings::values.preload_textures,
                                              ui->toggle_preload_textures, preload_textures);
+    ConfigurationShared::ApplyPerGameSetting(&Settings::values.async_custom_loading,
+                                             ui->toggle_async_custom_loading, async_custom_loading);
 
     Settings::values.bg_red = static_cast<float>(bg_color.redF());
     Settings::values.bg_green = static_cast<float>(bg_color.greenF());
@@ -179,13 +173,15 @@ void ConfigureEnhancements::SetupPerGameUI() {
     // Block the global settings if a game is currently running that overrides them
     if (Settings::IsConfiguringGlobal()) {
         ui->widget_resolution->setEnabled(Settings::values.resolution_factor.UsingGlobal());
-        ui->widget_texture_filter->setEnabled(Settings::values.texture_filter_name.UsingGlobal());
+        ui->widget_texture_filter->setEnabled(Settings::values.texture_filter.UsingGlobal());
         ui->toggle_linear_filter->setEnabled(Settings::values.filter_mode.UsingGlobal());
         ui->toggle_swap_screen->setEnabled(Settings::values.swap_screen.UsingGlobal());
         ui->toggle_upright_screen->setEnabled(Settings::values.upright_screen.UsingGlobal());
         ui->toggle_dump_textures->setEnabled(Settings::values.dump_textures.UsingGlobal());
         ui->toggle_custom_textures->setEnabled(Settings::values.custom_textures.UsingGlobal());
         ui->toggle_preload_textures->setEnabled(Settings::values.preload_textures.UsingGlobal());
+        ui->toggle_async_custom_loading->setEnabled(
+            Settings::values.async_custom_loading.UsingGlobal());
         return;
     }
 
@@ -205,15 +201,19 @@ void ConfigureEnhancements::SetupPerGameUI() {
                                             Settings::values.custom_textures, custom_textures);
     ConfigurationShared::SetColoredTristate(ui->toggle_preload_textures,
                                             Settings::values.preload_textures, preload_textures);
+    ConfigurationShared::SetColoredTristate(ui->toggle_async_custom_loading,
+                                            Settings::values.async_custom_loading,
+                                            async_custom_loading);
 
     ConfigurationShared::SetColoredComboBox(
         ui->resolution_factor_combobox, ui->widget_resolution,
-        static_cast<u32>(Settings::values.resolution_factor.GetValue(true)));
+        static_cast<int>(Settings::values.resolution_factor.GetValue(true)));
 
-    ConfigurationShared::SetColoredComboBox(ui->texture_filter_combobox, ui->widget_texture_filter,
-                                            0);
+    ConfigurationShared::SetColoredComboBox(
+        ui->texture_filter_combobox, ui->widget_texture_filter,
+        static_cast<int>(Settings::values.texture_filter.GetValue(true)));
 
     ConfigurationShared::SetColoredComboBox(
         ui->layout_combobox, ui->widget_layout,
-        static_cast<u32>(Settings::values.layout_option.GetValue(true)));
+        static_cast<int>(Settings::values.layout_option.GetValue(true)));
 }

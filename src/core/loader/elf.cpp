@@ -16,9 +16,6 @@
 
 using Kernel::CodeSet;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// ELF Header Constants
-
 // File type
 enum ElfType {
     ET_NONE = 0,
@@ -108,9 +105,6 @@ typedef unsigned int Elf32_Off;
 typedef signed int Elf32_Sword;
 typedef unsigned int Elf32_Word;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// ELF file header
-
 struct Elf32_Ehdr {
     unsigned char e_ident[EI_NIDENT];
     Elf32_Half e_type;
@@ -170,9 +164,6 @@ struct Elf32_Rel {
     Elf32_Word r_info;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// ElfReader class
-
 typedef int SectionID;
 
 class ElfReader {
@@ -208,7 +199,7 @@ public:
     u32 GetFlags() const {
         return (u32)(header->e_flags);
     }
-    std::shared_ptr<CodeSet> LoadInto(u32 vaddr);
+    std::shared_ptr<CodeSet> LoadInto(Core::System& system, u32 vaddr);
 
     int GetNumSegments() const {
         return (int)(header->e_phnum);
@@ -271,7 +262,7 @@ const char* ElfReader::GetSectionName(int section) const {
     return nullptr;
 }
 
-std::shared_ptr<CodeSet> ElfReader::LoadInto(u32 vaddr) {
+std::shared_ptr<CodeSet> ElfReader::LoadInto(Core::System& system, u32 vaddr) {
     LOG_DEBUG(Loader, "String section: {}", header->e_shstrndx);
 
     // Should we relocate?
@@ -299,7 +290,7 @@ std::shared_ptr<CodeSet> ElfReader::LoadInto(u32 vaddr) {
     std::vector<u8> program_image(total_image_size);
     std::size_t current_image_position = 0;
 
-    std::shared_ptr<CodeSet> codeset = Core::System::GetInstance().Kernel().CreateCodeSet("", 0);
+    std::shared_ptr<CodeSet> codeset = system.Kernel().CreateCodeSet("", 0);
 
     for (unsigned int i = 0; i < header->e_phnum; ++i) {
         Elf32_Phdr* p = &segments[i];
@@ -336,7 +327,7 @@ std::shared_ptr<CodeSet> ElfReader::LoadInto(u32 vaddr) {
             codeset_segment->addr = segment_addr;
             codeset_segment->size = aligned_size;
 
-            memcpy(&program_image[current_image_position], GetSegmentPtr(i), p->p_filesz);
+            std::memcpy(&program_image[current_image_position], GetSegmentPtr(i), p->p_filesz);
             current_image_position += aligned_size;
         }
     }
@@ -358,9 +349,6 @@ SectionID ElfReader::GetSectionByName(const char* name, int firstSection) const 
     }
     return -1;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Loader namespace
 
 namespace Loader {
 
@@ -392,15 +380,15 @@ ResultStatus AppLoader_ELF::Load(std::shared_ptr<Kernel::Process>& process) {
         return ResultStatus::Error;
 
     ElfReader elf_reader(&buffer[0]);
-    std::shared_ptr<CodeSet> codeset = elf_reader.LoadInto(Memory::PROCESS_IMAGE_VADDR);
+    std::shared_ptr<CodeSet> codeset = elf_reader.LoadInto(system, Memory::PROCESS_IMAGE_VADDR);
     codeset->name = filename;
 
-    process = Core::System::GetInstance().Kernel().CreateProcess(std::move(codeset));
+    process = system.Kernel().CreateProcess(std::move(codeset));
     process->Set3dsxKernelCaps();
 
     // Attach the default resource limit (APPLICATION) to the process
-    process->resource_limit = Core::System::GetInstance().Kernel().ResourceLimit().GetForCategory(
-        Kernel::ResourceLimitCategory::APPLICATION);
+    process->resource_limit =
+        system.Kernel().ResourceLimit().GetForCategory(Kernel::ResourceLimitCategory::Application);
 
     process->Run(48, Kernel::DEFAULT_STACK_SIZE);
 

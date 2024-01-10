@@ -18,6 +18,10 @@ class QTouchEvent;
 
 class GRenderWindow;
 
+namespace Core {
+class System;
+}
+
 namespace VideoCore {
 enum class LoadCallbackStage;
 }
@@ -26,7 +30,7 @@ class EmuThread final : public QThread {
     Q_OBJECT
 
 public:
-    explicit EmuThread(Frontend::GraphicsContext& context);
+    explicit EmuThread(Core::System& system_, Frontend::GraphicsContext& context);
     ~EmuThread() override;
 
     /**
@@ -80,6 +84,7 @@ private:
     std::mutex running_mutex;
     std::condition_variable running_cv;
 
+    Core::System& system;
     Frontend::GraphicsContext& core_context;
 
 signals:
@@ -112,7 +117,7 @@ class GRenderWindow : public QWidget, public Frontend::EmuWindow {
     Q_OBJECT
 
 public:
-    GRenderWindow(QWidget* parent, EmuThread* emu_thread, bool is_secondary);
+    GRenderWindow(QWidget* parent, EmuThread* emu_thread, Core::System& system, bool is_secondary);
     ~GRenderWindow() override;
 
     // EmuWindow implementation.
@@ -182,12 +187,14 @@ private:
     void OnMinimalClientAreaChangeRequest(std::pair<u32, u32> minimal_size) override;
 
     bool InitializeOpenGL();
+    void InitializeVulkan();
     void InitializeSoftware();
     bool LoadOpenGL();
 
     QWidget* child_widget = nullptr;
 
     EmuThread* emu_thread;
+    Core::System& system;
 
     /// Main context that will be shared with all other contexts that are requested.
     /// If this is used in a shared context setting, then this should not be used directly, but

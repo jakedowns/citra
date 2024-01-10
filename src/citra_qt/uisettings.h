@@ -77,8 +77,10 @@ struct Values {
     Settings::Setting<bool> show_status_bar{true, "showStatusBar"};
 
     Settings::Setting<bool> confirm_before_closing{true, "confirmClose"};
+    Settings::Setting<bool> save_state_warning{true, "saveStateWarning"};
     Settings::Setting<bool> first_start{true, "firstStart"};
     Settings::Setting<bool> pause_when_in_background{false, "pauseWhenInBackground"};
+    Settings::Setting<bool> mute_when_in_background{false, "muteWhenInBackground"};
     Settings::Setting<bool> hide_mouse{false, "hideInactiveMouse"};
 
     bool updater_found;
@@ -95,6 +97,12 @@ struct Values {
     Settings::Setting<GameListText> game_list_row_2{GameListText::FileName, "row2"};
     Settings::Setting<bool> game_list_hide_no_icon{false, "hideNoIcon"};
     Settings::Setting<bool> game_list_single_line_mode{false, "singleLineMode"};
+
+    // Compatibility List
+    Settings::Setting<bool> show_compat_column{true, "show_compat_column"};
+    Settings::Setting<bool> show_region_column{true, "show_region_column"};
+    Settings::Setting<bool> show_type_column{true, "show_type_column"};
+    Settings::Setting<bool> show_size_column{true, "show_size_column"};
 
     Settings::Setting<u16> screenshot_resolution_factor{0, "screenshot_resolution_factor"};
     Settings::SwitchableSetting<std::string> screenshot_path{"", "screenshotPath"};

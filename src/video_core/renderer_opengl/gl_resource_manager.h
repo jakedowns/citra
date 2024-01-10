@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <span>
 #include <utility>
 #include <vector>
 #include <glad/glad.h>
@@ -61,9 +62,6 @@ public:
     void Allocate(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width,
                   GLsizei height = 1, GLsizei depth = 1);
 
-    void CopyFrom(const OGLTexture& other, GLenum target, GLsizei levels, GLsizei width,
-                  GLsizei height);
-
     GLuint handle = 0;
 };
 
@@ -108,7 +106,7 @@ public:
         return *this;
     }
 
-    void Create(const char* source, GLenum type);
+    void Create(std::string_view source, GLenum type);
 
     void Release();
 
@@ -132,10 +130,10 @@ public:
     }
 
     /// Creates a new program from given shader objects
-    void Create(bool separable_program, const std::vector<GLuint>& shaders);
+    void Create(bool separable_program, std::span<const GLuint> shaders);
 
     /// Creates a new program from given shader soruce code
-    void Create(const char* vert_shader, const char* frag_shader);
+    void Create(std::string_view vert_shader, std::string_view frag_shader);
 
     /// Deletes the internal OpenGL resource
     void Release();

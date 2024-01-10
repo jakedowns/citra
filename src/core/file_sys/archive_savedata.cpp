@@ -8,9 +8,6 @@
 #include "core/file_sys/archive_savedata.h"
 #include "core/hle/kernel/process.h"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// FileSys namespace
-
 SERIALIZE_EXPORT_IMPL(FileSys::ArchiveFactory_SaveData)
 
 namespace FileSys {
@@ -24,9 +21,9 @@ ResultVal<std::unique_ptr<ArchiveBackend>> ArchiveFactory_SaveData::Open(const P
     return sd_savedata_source->Open(program_id);
 }
 
-ResultCode ArchiveFactory_SaveData::Format(const Path& path,
-                                           const FileSys::ArchiveFormatInfo& format_info,
-                                           u64 program_id) {
+Result ArchiveFactory_SaveData::Format(const Path& path,
+                                       const FileSys::ArchiveFormatInfo& format_info,
+                                       u64 program_id) {
     return sd_savedata_source->Format(program_id, format_info);
 }
 

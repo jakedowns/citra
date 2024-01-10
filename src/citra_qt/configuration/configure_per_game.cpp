@@ -9,6 +9,7 @@
 #include <fmt/format.h>
 #include "citra_qt/configuration/config.h"
 #include "citra_qt/configuration/configure_audio.h"
+#include "citra_qt/configuration/configure_cheats.h"
 #include "citra_qt/configuration/configure_debug.h"
 #include "citra_qt/configuration/configure_enhancements.h"
 #include "citra_qt/configuration/configure_general.h"
@@ -23,18 +24,21 @@
 #include "ui_configure_per_game.h"
 
 ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const QString& file_name,
-                                   Core::System& system_)
+                                   std::span<const QString> physical_devices, Core::System& system_)
     : QDialog(parent), ui(std::make_unique<Ui::ConfigurePerGame>()),
       filename{file_name.toStdString()}, title_id{title_id_}, system{system_} {
-    const auto config_file_name = title_id == 0 ? filename : fmt::format("{:016X}", title_id);
+    const auto config_file_name = title_id == 0 ? std::string(FileUtil::GetFilename(filename))
+                                                : fmt::format("{:016X}", title_id);
     game_config = std::make_unique<Config>(config_file_name, Config::ConfigType::PerGameConfig);
 
-    audio_tab = std::make_unique<ConfigureAudio>(this);
+    const bool is_powered_on = system.IsPoweredOn();
+    audio_tab = std::make_unique<ConfigureAudio>(is_powered_on, this);
     general_tab = std::make_unique<ConfigureGeneral>(this);
     enhancements_tab = std::make_unique<ConfigureEnhancements>(this);
-    graphics_tab = std::make_unique<ConfigureGraphics>(this);
-    system_tab = std::make_unique<ConfigureSystem>(this);
-    debug_tab = std::make_unique<ConfigureDebug>(this);
+    graphics_tab = std::make_unique<ConfigureGraphics>(physical_devices, is_powered_on, this);
+    system_tab = std::make_unique<ConfigureSystem>(system, this);
+    debug_tab = std::make_unique<ConfigureDebug>(is_powered_on, this);
+    cheat_tab = std::make_unique<ConfigureCheats>(system.CheatEngine(), title_id, this);
 
     ui->setupUi(this);
 
@@ -44,6 +48,7 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const QString
     ui->tabWidget->addTab(graphics_tab.get(), tr("Graphics"));
     ui->tabWidget->addTab(audio_tab.get(), tr("Audio"));
     ui->tabWidget->addTab(debug_tab.get(), tr("Debug"));
+    ui->tabWidget->addTab(cheat_tab.get(), tr("Cheats"));
 
     setFocusPolicy(Qt::ClickFocus);
     setWindowTitle(tr("Properties"));
@@ -59,6 +64,9 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const QString
 
     connect(ui->button_reset_per_game, &QPushButton::clicked, this,
             &ConfigurePerGame::ResetDefaults);
+
+    connect(ui->buttonBox, &QDialogButtonBox::accepted, this,
+            &ConfigurePerGame::HandleAcceptedEvent);
 
     LoadConfiguration();
 }
@@ -81,6 +89,13 @@ void ConfigurePerGame::ResetDefaults() {
     close();
 }
 
+void ConfigurePerGame::HandleAcceptedEvent() {
+    if (ui->tabWidget->currentWidget() == cheat_tab.get()) {
+        cheat_tab->ApplyConfiguration();
+    }
+    accept();
+}
+
 void ConfigurePerGame::ApplyConfiguration() {
     general_tab->ApplyConfiguration();
     system_tab->ApplyConfiguration();
@@ -89,7 +104,7 @@ void ConfigurePerGame::ApplyConfiguration() {
     audio_tab->ApplyConfiguration();
     debug_tab->ApplyConfiguration();
 
-    Settings::Apply();
+    system.ApplySettings();
     Settings::LogSettings();
 
     game_config->Save();
@@ -109,11 +124,14 @@ void ConfigurePerGame::RetranslateUI() {
 
 void ConfigurePerGame::HandleApplyButtonClicked() {
     ApplyConfiguration();
+    if (ui->tabWidget->currentWidget() == cheat_tab.get()) {
+        cheat_tab->ApplyConfiguration();
+    }
 }
 
 static QPixmap GetQPixmapFromSMDH(std::vector<u8>& smdh_data) {
     Loader::SMDH smdh;
-    memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
+    std::memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
 
     bool large = true;
     std::vector<u16> icon_data = smdh.GetIcon(large);

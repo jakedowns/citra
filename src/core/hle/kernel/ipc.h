@@ -26,7 +26,6 @@ struct MappedBufferContext {
     VAddr target_address;
 
     std::shared_ptr<BackingMem> buffer;
-    std::shared_ptr<BackingMem> reserve_buffer;
 
 private:
     template <class Archive>
@@ -36,16 +35,14 @@ private:
         ar& source_address;
         ar& target_address;
         ar& buffer;
-        ar& reserve_buffer;
     }
     friend class boost::serialization::access;
 };
 
 /// Performs IPC command buffer translation from one process to another.
-ResultCode TranslateCommandBuffer(KernelSystem& system, Memory::MemorySystem& memory,
-                                  std::shared_ptr<Thread> src_thread,
-                                  std::shared_ptr<Thread> dst_thread, VAddr src_address,
-                                  VAddr dst_address,
-                                  std::vector<MappedBufferContext>& mapped_buffer_context,
-                                  bool reply);
+Result TranslateCommandBuffer(KernelSystem& system, Memory::MemorySystem& memory,
+                              std::shared_ptr<Thread> src_thread,
+                              std::shared_ptr<Thread> dst_thread, VAddr src_address,
+                              VAddr dst_address,
+                              std::vector<MappedBufferContext>& mapped_buffer_context, bool reply);
 } // namespace Kernel

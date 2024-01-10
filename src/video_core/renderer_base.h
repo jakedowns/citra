@@ -18,16 +18,20 @@ class System;
 
 namespace VideoCore {
 
+enum class ScreenId : u32 {
+    TopLeft,
+    TopRight,
+    Bottom,
+};
+
 struct RendererSettings {
     // Screenshot
     std::atomic_bool screenshot_requested{false};
     void* screenshot_bits{};
-    std::function<void()> screenshot_complete_callback;
+    std::function<void(bool)> screenshot_complete_callback;
     Layout::FramebufferLayout screenshot_framebuffer_layout;
     // Renderer
-    std::atomic_bool texture_filter_update_requested{false};
     std::atomic_bool bg_color_update_requested{false};
-    std::atomic_bool sampler_update_requested{false};
     std::atomic_bool shader_update_requested{false};
 };
 
@@ -38,7 +42,7 @@ public:
     virtual ~RendererBase();
 
     /// Returns the rasterizer owned by the renderer
-    virtual VideoCore::RasterizerInterface* Rasterizer() const = 0;
+    virtual VideoCore::RasterizerInterface* Rasterizer() = 0;
 
     /// Finalize rendering the guest frame and draw into the presentation texture
     virtual void SwapBuffers() = 0;
@@ -59,6 +63,9 @@ public:
     /// Synchronizes fixed function renderer state
     virtual void Sync() {}
 
+    /// This is called to notify the rendering backend of a surface change
+    virtual void NotifySurfaceChanged() {}
+
     /// Returns the resolution scale factor relative to the native 3DS screen resolution
     u32 GetResolutionScaleFactor();
 
@@ -68,14 +75,11 @@ public:
     /// Ends the current frame
     void EndFrame();
 
-    // Getter/setter functions:
-    // ------------------------
-
     f32 GetCurrentFPS() const {
         return current_fps;
     }
 
-    int GetCurrentFrame() const {
+    s32 GetCurrentFrame() const {
         return current_frame;
     }
 
@@ -99,7 +103,7 @@ public:
     [[nodiscard]] bool IsScreenshotPending() const;
 
     /// Request a screenshot of the next frame
-    void RequestScreenshot(void* data, std::function<void()> callback,
+    void RequestScreenshot(void* data, std::function<void(bool)> callback,
                            const Layout::FramebufferLayout& layout);
 
 protected:
@@ -108,7 +112,7 @@ protected:
     Frontend::EmuWindow& render_window;    ///< Reference to the render window handle.
     Frontend::EmuWindow* secondary_window; ///< Reference to the secondary render window handle.
     f32 current_fps = 0.0f;                ///< Current framerate, should be set by the renderer
-    int current_frame = 0;                 ///< Current frame, should be set by the renderer
+    s32 current_frame = 0;                 ///< Current frame, should be set by the renderer
 };
 
 } // namespace VideoCore

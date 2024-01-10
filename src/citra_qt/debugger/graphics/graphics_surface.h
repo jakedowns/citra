@@ -14,6 +14,10 @@ class CSpinBox;
 
 class GraphicsSurfaceWidget;
 
+namespace Core {
+class System;
+}
+
 class SurfacePicture : public QLabel {
     Q_OBJECT
 
@@ -72,7 +76,8 @@ class GraphicsSurfaceWidget : public BreakPointObserverDock {
     static unsigned int NibblesPerPixel(Format format);
 
 public:
-    explicit GraphicsSurfaceWidget(std::shared_ptr<Pica::DebugContext> debug_context,
+    explicit GraphicsSurfaceWidget(Core::System& system,
+                                   std::shared_ptr<Pica::DebugContext> debug_context,
                                    QWidget* parent = nullptr);
     void Pick(int x, int y);
 
@@ -90,11 +95,12 @@ signals:
     void Update();
 
 private:
-    void OnBreakPointHit(Pica::DebugContext::Event event, void* data) override;
+    void OnBreakPointHit(Pica::DebugContext::Event event, const void* data) override;
     void OnResumed() override;
 
     void SaveSurface();
 
+    Core::System& system;
     QComboBox* surface_source_list;
     CSpinBox* surface_address_control;
     QSpinBox* surface_width_control;

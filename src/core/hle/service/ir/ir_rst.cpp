@@ -83,7 +83,7 @@ void IR_RST::UpdateCallback(std::uintptr_t user_data, s64 cycles_late) {
     s16 c_stick_x = static_cast<s16>(c_stick_x_f * MAX_CSTICK_RADIUS);
     s16 c_stick_y = static_cast<s16>(c_stick_y_f * MAX_CSTICK_RADIUS);
 
-    Core::Movie::GetInstance().HandleIrRst(state, c_stick_x, c_stick_y);
+    system.Movie().HandleIrRst(state, c_stick_x, c_stick_y);
 
     if (!raw_c_stick) {
         const HID::DirectionState direction = HID::GetStickDirectionState(c_stick_x, c_stick_y);
@@ -128,14 +128,14 @@ void IR_RST::UpdateCallback(std::uintptr_t user_data, s64 cycles_late) {
 }
 
 void IR_RST::GetHandles(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x01, 0, 0);
+    IPC::RequestParser rp(ctx);
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 3);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
     rb.PushMoveObjects(shared_memory, update_event);
 }
 
 void IR_RST::Initialize(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x02, 2, 0);
+    IPC::RequestParser rp(ctx);
     update_period = static_cast<int>(rp.Pop<u32>());
     raw_c_stick = rp.Pop<bool>();
 
@@ -147,23 +147,23 @@ void IR_RST::Initialize(Kernel::HLERequestContext& ctx) {
     system.CoreTiming().ScheduleEvent(msToCycles(update_period), update_callback_id);
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
 
     LOG_DEBUG(Service_IR, "called. update_period={}, raw_c_stick={}", update_period, raw_c_stick);
 }
 
 void IR_RST::Shutdown(Kernel::HLERequestContext& ctx) {
-    IPC::RequestParser rp(ctx, 0x03, 0, 0);
+    IPC::RequestParser rp(ctx);
 
     system.CoreTiming().UnscheduleEvent(update_callback_id, 0);
     UnloadInputDevices();
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-    rb.Push(RESULT_SUCCESS);
+    rb.Push(ResultSuccess);
     LOG_DEBUG(Service_IR, "called");
 }
 
-IR_RST::IR_RST(Core::System& system) : ServiceFramework("ir:rst", 1), system(system) {
+IR_RST::IR_RST(Core::System& system) : ServiceFramework("ir:rst", 2), system(system) {
     using namespace Kernel;
     // Note: these two kernel objects are even available before Initialize service function is
     // called.
@@ -180,10 +180,12 @@ IR_RST::IR_RST(Core::System& system) : ServiceFramework("ir:rst", 1), system(sys
         });
 
     static const FunctionInfo functions[] = {
-        {0x00010000, &IR_RST::GetHandles, "GetHandles"},
-        {0x00020080, &IR_RST::Initialize, "Initialize"},
-        {0x00030000, &IR_RST::Shutdown, "Shutdown"},
-        {0x00090000, nullptr, "WriteToTwoFields"},
+        // clang-format off
+        {0x0001, &IR_RST::GetHandles, "GetHandles"},
+        {0x0002, &IR_RST::Initialize, "Initialize"},
+        {0x0003, &IR_RST::Shutdown, "Shutdown"},
+        {0x0009, nullptr, "WriteToTwoFields"},
+        // clang-format on
     };
     RegisterHandlers(functions);
 }

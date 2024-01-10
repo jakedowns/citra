@@ -11,9 +11,6 @@
 #include "core/file_sys/errors.h"
 #include "core/file_sys/file_backend.h"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// FileSys namespace
-
 SERIALIZE_EXPORT_IMPL(FileSys::SDMCWriteOnlyArchive)
 SERIALIZE_EXPORT_IMPL(FileSys::ArchiveFactory_SDMCWriteOnly)
 
@@ -47,7 +44,7 @@ ResultVal<std::unique_ptr<FileBackend>> SDMCWriteOnlyArchive::OpenFile(const Pat
                                                                        const Mode& mode) const {
     if (mode.read_flag) {
         LOG_ERROR(Service_FS, "Read flag is not supported");
-        return ERROR_INVALID_READ_FLAG;
+        return ResultInvalidReadFlag;
     }
     return SDMCArchive::OpenFileBase(path, mode);
 }
@@ -55,7 +52,7 @@ ResultVal<std::unique_ptr<FileBackend>> SDMCWriteOnlyArchive::OpenFile(const Pat
 ResultVal<std::unique_ptr<DirectoryBackend>> SDMCWriteOnlyArchive::OpenDirectory(
     const Path& path) const {
     LOG_ERROR(Service_FS, "Not supported");
-    return ERROR_UNSUPPORTED_OPEN_FLAGS;
+    return ResultUnsupportedOpenFlags;
 }
 
 ArchiveFactory_SDMCWriteOnly::ArchiveFactory_SDMCWriteOnly(const std::string& mount_point)
@@ -81,24 +78,22 @@ ResultVal<std::unique_ptr<ArchiveBackend>> ArchiveFactory_SDMCWriteOnly::Open(co
                                                                               u64 program_id) {
     std::unique_ptr<DelayGenerator> delay_generator =
         std::make_unique<SDMCWriteOnlyDelayGenerator>();
-    auto archive =
-        std::make_unique<SDMCWriteOnlyArchive>(sdmc_directory, std::move(delay_generator));
-    return MakeResult<std::unique_ptr<ArchiveBackend>>(std::move(archive));
+    return std::make_unique<SDMCWriteOnlyArchive>(sdmc_directory, std::move(delay_generator));
 }
 
-ResultCode ArchiveFactory_SDMCWriteOnly::Format(const Path& path,
-                                                const FileSys::ArchiveFormatInfo& format_info,
-                                                u64 program_id) {
+Result ArchiveFactory_SDMCWriteOnly::Format(const Path& path,
+                                            const FileSys::ArchiveFormatInfo& format_info,
+                                            u64 program_id) {
     // TODO(wwylele): hwtest this
     LOG_ERROR(Service_FS, "Attempted to format a SDMC write-only archive.");
-    return ResultCode(-1);
+    return ResultUnknown;
 }
 
 ResultVal<ArchiveFormatInfo> ArchiveFactory_SDMCWriteOnly::GetFormatInfo(const Path& path,
                                                                          u64 program_id) const {
     // TODO(Subv): Implement
     LOG_ERROR(Service_FS, "Unimplemented GetFormatInfo archive {}", GetName());
-    return ResultCode(-1);
+    return ResultUnknown;
 }
 
 } // namespace FileSys

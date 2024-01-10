@@ -8,9 +8,8 @@ add_executable(citra-room
 
 create_target_directory_groups(citra-room)
 
-target_link_libraries(citra-room PRIVATE common network)
+target_link_libraries(citra-room PRIVATE citra_common network)
 if (ENABLE_WEB_SERVICE)
-    target_compile_definitions(citra-room PRIVATE -DENABLE_WEB_SERVICE)
     target_link_libraries(citra-room PRIVATE web_service)
 endif()
 
@@ -26,4 +25,10 @@ endif()
 
 if (CITRA_USE_PRECOMPILED_HEADERS)
     target_precompile_headers(citra-room PRIVATE precompiled_headers.h)
+endif()
+
+# Bundle in-place on MSVC so dependencies can be resolved by builds.
+if (MSVC)
+    include(BundleTarget)
+    bundle_target_in_place(citra-room)
 endif()

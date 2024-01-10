@@ -99,16 +99,20 @@ cpu_clock_percentage =
 
 [Renderer]
 # Whether to render using OpenGL
-# 1: OpenGLES (default)
+# 1: OpenGL ES (default), 2: Vulkan
 graphics_api =
+
+# Whether to compile shaders on multiple worker threads (Vulkan only)
+# 0: Off, 1: On (default)
+async_shader_compilation =
+
+# Whether to emit PICA fragment shader using SPIRV or GLSL (Vulkan only)
+# 0: GLSL, 1: SPIR-V (default)
+spirv_shader_gen =
 
 # Whether to use hardware shaders to emulate 3DS shaders
 # 0: Software, 1 (default): Hardware
 use_hw_shader =
-
-# Whether to use separable shaders to emulate 3DS shaders (macOS only)
-# 0: Off (Default), 1 : On
-separable_shader =
 
 # Whether to use accurate multiplication in hardware shaders
 # 0: Off (Default. Faster, but causes issues in some games) 1: On (Slower, but correct)
@@ -217,6 +221,10 @@ custom_textures =
 # 0 (default): Off, 1: On
 preload_textures =
 
+# Loads custom textures asynchronously with background threads.
+# 0: Off, 1 (default): On
+async_custom_loading =
+
 [Audio]
 # Whether or not to enable DSP LLE
 # 0 (default): No, 1: Yes
@@ -226,27 +234,31 @@ enable_dsp_lle =
 # 0 (default): No, 1: Yes
 enable_dsp_lle_thread =
 
-# Which audio output engine to use.
-# auto (default): Auto-select, null: No audio output, sdl2: SDL2 (if available)
-output_engine =
-
 # Whether or not to enable the audio-stretching post-processing effect.
 # This effect adjusts audio speed to match emulation speed and helps prevent audio stutter,
 # at the cost of increasing audio latency.
 # 0: No, 1 (default): Yes
 enable_audio_stretching =
 
-# Which audio device to use.
-# auto (default): Auto-select
-output_device =
-
-# Which mic input type to use.
-# 0: None, 1 (default): Real device, 2: Static noise
-mic_input_type =
-
 # Output volume.
 # 1.0 (default): 100%, 0.0; mute
 volume =
+
+# Which audio output type to use.
+# 0 (default): Auto-select, 1: No audio output, 2: Cubeb (if available), 3: OpenAL (if available), 4: SDL2 (if available)
+output_type =
+
+# Which audio output device to use.
+# auto (default): Auto-select
+output_device =
+
+# Which audio input type to use.
+# 0 (default): Auto-select, 1: No audio input, 2: Static noise, 3: Cubeb (if available), 4: OpenAL (if available)
+input_type =
+
+# Which audio input device to use.
+# auto (default): Auto-select
+input_device =
 
 [Data Storage]
 # Whether to create a virtual SD card.
@@ -275,6 +287,14 @@ init_clock =
 # set to fixed time. Default 2000-01-01 00:00:01
 # Note: 3DS can only handle times later then Jan 1 2000
 init_time =
+
+# The system ticks count to use when citra starts
+# 0: Random (default), 1: Fixed
+init_ticks_type =
+
+# Tick count to use when init_ticks_type is set to Fixed.
+# Defaults to 0.
+init_ticks_override =
 
 # Plugin loader state, if enabled plugins will be loaded from the SD card.
 # You can also set if homebrew apps are allowed to enable the plugin loader
@@ -330,7 +350,7 @@ gdbstub_port=24689
 
 [WebService]
 # Whether or not to enable telemetry
-# 0: No, 1 (default): Yes
+# 0 (default): No, 1: Yes
 enable_telemetry =
 # URL for Web API
 web_api_url = https://api.citra-emu.org

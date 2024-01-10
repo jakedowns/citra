@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "common/settings.h"
 #include "core/core.h"
 #include "core/frontend/emu_window.h"
 #include "core/tracer/recorder.h"
@@ -48,17 +49,13 @@ void RendererBase::EndFrame() {
 
     system.frame_limiter.DoFrameLimiting(system.CoreTiming().GetGlobalTimeUs());
     system.perf_stats->BeginSystemFrame();
-
-    if (Pica::g_debug_context && Pica::g_debug_context->recorder) {
-        Pica::g_debug_context->recorder->FrameFinished();
-    }
 }
 
 bool RendererBase::IsScreenshotPending() const {
     return settings.screenshot_requested;
 }
 
-void RendererBase::RequestScreenshot(void* data, std::function<void()> callback,
+void RendererBase::RequestScreenshot(void* data, std::function<void(bool)> callback,
                                      const Layout::FramebufferLayout& layout) {
     if (settings.screenshot_requested) {
         LOG_ERROR(Render, "A screenshot is already requested or in progress, ignoring the request");

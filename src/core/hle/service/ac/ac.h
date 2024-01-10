@@ -19,6 +19,9 @@ class Event;
 namespace Service::AC {
 class Module final {
 public:
+    explicit Module(Core::System& system_);
+    ~Module() = default;
+
     class Interface : public ServiceFramework<Interface> {
     public:
         Interface(std::shared_ptr<Module> ac, const char* name, u32 max_session);
@@ -121,6 +124,14 @@ public:
         void RegisterDisconnectEvent(Kernel::HLERequestContext& ctx);
 
         /**
+         * AC::GetConnectingProxyEnable service function
+         *  Outputs:
+         *      1 : Result of function, 0 on success, otherwise error code
+         *      2 : bool, is proxy enabled
+         */
+        void GetConnectingProxyEnable(Kernel::HLERequestContext& ctx);
+
+        /**
          * AC::IsConnected service function
          *  Outputs:
          *      1 : Result of function, 0 on success, otherwise error code
@@ -142,6 +153,12 @@ public:
     };
 
 protected:
+    enum class WifiStatus {
+        STATUS_DISCONNECTED = 0,
+        STATUS_CONNECTED_O3DS = 1,
+        STATUS_CONNECTED_N3DS = 2,
+    };
+
     struct ACConfig {
         std::array<u8, 0x200> data;
     };
@@ -155,11 +172,16 @@ protected:
     std::shared_ptr<Kernel::Event> disconnect_event;
 
 private:
+    Core::System& system;
+
     template <class Archive>
-    void serialize(Archive& ar, const unsigned int file_version);
+    void serialize(Archive& ar, const unsigned int);
     friend class boost::serialization::access;
 };
 
 void InstallInterfaces(Core::System& system);
 
 } // namespace Service::AC
+
+BOOST_CLASS_EXPORT_KEY(Service::AC::Module)
+SERVICE_CONSTRUCT(Service::AC::Module)

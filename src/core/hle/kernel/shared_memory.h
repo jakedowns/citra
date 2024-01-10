@@ -9,6 +9,7 @@
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/export.hpp>
 #include <boost/serialization/string.hpp>
+#include <boost/serialization/weak_ptr.hpp>
 #include "common/common_types.h"
 #include "common/memory_ref.h"
 #include "core/hle/kernel/object.h"
@@ -28,8 +29,8 @@ public:
     std::string GetName() const override {
         return name;
     }
-    void SetName(std::string name) {
-        this->name = std::move(name);
+    void SetName(std::string name_) {
+        name = std::move(name_);
     }
 
     static constexpr HandleType HANDLE_TYPE = HandleType::SharedMemory;
@@ -60,8 +61,8 @@ public:
      * @param permissions Memory block map permissions (specified by SVC field)
      * @param other_permissions Memory block map other permissions (specified by SVC field)
      */
-    ResultCode Map(Process& target_process, VAddr address, MemoryPermission permissions,
-                   MemoryPermission other_permissions);
+    Result Map(Process& target_process, VAddr address, MemoryPermission permissions,
+               MemoryPermission other_permissions);
 
     /**
      * Unmaps a shared memory block from the specified address in system memory
@@ -69,7 +70,7 @@ public:
      * @param address Address in system memory where the shared memory block is mapped
      * @return Result code of the unmap operation
      */
-    ResultCode Unmap(Process& target_process, VAddr address);
+    Result Unmap(Process& target_process, VAddr address);
 
     /**
      * Gets a pointer to the shared memory block
@@ -93,12 +94,14 @@ private:
     std::vector<std::pair<MemoryRef, u32>> backing_blocks;
     /// Size of the memory block. Page-aligned.
     u32 size = 0;
+    /// Region of memory this block exists in.
+    std::shared_ptr<MemoryRegionInfo> memory_region = nullptr;
     /// Permission restrictions applied to the process which created the block.
     MemoryPermission permissions{};
     /// Permission restrictions applied to other processes mapping the block.
     MemoryPermission other_permissions{};
     /// Process that created this shared memory block.
-    Process* owner_process;
+    std::weak_ptr<Process> owner_process;
     /// Address of shared memory block in the owner process if specified.
     VAddr base_address = 0;
     /// Name of shared memory object.
@@ -115,6 +118,7 @@ private:
         ar& linear_heap_phys_offset;
         ar& backing_blocks;
         ar& size;
+        ar& memory_region;
         ar& permissions;
         ar& other_permissions;
         ar& owner_process;

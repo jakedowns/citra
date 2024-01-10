@@ -47,7 +47,9 @@ void CheckNew3DS(IPC::RequestBuilder& rb);
 
 class Module final {
 public:
-    Module();
+    explicit Module(Core::System& system_);
+    ~Module() = default;
+
     static u16 GetPlayCoins();
     static void SetPlayCoins(u16 play_coins);
 
@@ -137,21 +139,27 @@ public:
          */
         void CheckNew3DS(Kernel::HLERequestContext& ctx);
 
+        /**
+         * PTM::GetSystemTime service function
+         *  Outputs:
+         *      1: Result code, 0 on success, otherwise error code
+         *      2-3: Time since 01/01/2020.
+         */
+        void GetSystemTime(Kernel::HLERequestContext& ctx);
+
     protected:
         std::shared_ptr<Module> ptm;
     };
 
 private:
+    Core::System& system;
+
     bool shell_open = true;
     bool battery_is_charging = true;
     bool pedometer_is_counting = false;
 
     template <class Archive>
-    void serialize(Archive& ar, const unsigned int) {
-        ar& shell_open;
-        ar& battery_is_charging;
-        ar& pedometer_is_counting;
-    }
+    void serialize(Archive& ar, const unsigned int);
     friend class boost::serialization::access;
 };
 
@@ -160,3 +168,4 @@ void InstallInterfaces(Core::System& system);
 } // namespace Service::PTM
 
 BOOST_CLASS_EXPORT_KEY(Service::PTM::Module)
+SERVICE_CONSTRUCT(Service::PTM::Module)

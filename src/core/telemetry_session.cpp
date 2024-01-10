@@ -11,6 +11,7 @@
 #include "common/scm_rev.h"
 #include "common/settings.h"
 #include "core/core.h"
+#include "core/loader/loader.h"
 #include "core/telemetry_session.h"
 #include "network/network_settings.h"
 
@@ -124,7 +125,8 @@ void TelemetrySession::AddInitialInfo(Loader::AppLoader& app_loader) {
     Telemetry::AppendOSInfo(field_collection);
 
     // Log user configuration information
-    AddField(Telemetry::FieldType::UserConfig, "Audio_SinkId", Settings::values.sink_id.GetValue());
+    AddField(Telemetry::FieldType::UserConfig, "Audio_SinkId",
+             static_cast<int>(Settings::values.output_type.GetValue()));
     AddField(Telemetry::FieldType::UserConfig, "Audio_EnableAudioStretching",
              Settings::values.enable_audio_stretching.GetValue());
     AddField(Telemetry::FieldType::UserConfig, "Core_UseCpuJit",

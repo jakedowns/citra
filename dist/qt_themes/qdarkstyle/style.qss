@@ -1,3 +1,32 @@
+QPushButton#GraphicsAPIStatusBarButton {
+    color: #656565;
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0px 3px 0px 3px;
+    text-align: center;
+}
+
+QPushButton#GraphicsAPIStatusBarButton:hover {
+    border: 1px solid #76797C;
+}
+
+QPushButton#TogglableStatusBarButton {
+    min-width: 0px;
+    color: #656565;
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0px 3px 0px 3px;
+    text-align: center;
+}
+
+QPushButton#TogglableStatusBarButton:checked {
+    color: #00FF00;
+}
+
+QPushButton#TogglableStatusBarButton:hover {
+    border: 1px solid #76797C;
+}
+
 QToolTip {
     border: 1px solid #76797C;
     background-color: #5A7566;
@@ -268,6 +297,11 @@ QAbstractItemView {
 QAbstractItemView:disabled,
 QAbstractItemView:read-only {
     alternate-background-color: #232629;
+}
+
+/* Workaround for https://bugreports.qt.io/browse/QTBUG-115529 */
+QAbstractItemView:item {
+    border: 0px;
 }
 
 QWidget:focus {

@@ -2,9 +2,9 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <cinttypes>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/sha.h>
@@ -17,9 +17,6 @@
 #include "core/file_sys/seed_db.h"
 #include "core/hw/aes/key.h"
 #include "core/loader/loader.h"
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// FileSys namespace
 
 namespace FileSys {
 
@@ -40,10 +37,10 @@ u64 GetModId(u64 program_id) {
  * @param size Size of compressed buffer
  * @return Size of decompressed buffer
  */
-static u32 LZSS_GetDecompressedSize(const u8* buffer, u32 size) {
+static std::size_t LZSS_GetDecompressedSize(std::span<const u8> buffer) {
     u32 offset_size;
-    std::memcpy(&offset_size, buffer + size - sizeof(u32), sizeof(u32));
-    return offset_size + size;
+    std::memcpy(&offset_size, buffer.data() + buffer.size() - sizeof(u32), sizeof(u32));
+    return offset_size + buffer.size();
 }
 
 /**
@@ -54,19 +51,18 @@ static u32 LZSS_GetDecompressedSize(const u8* buffer, u32 size) {
  * @param decompressed_size Size of decompressed buffer
  * @return True on success, otherwise false
  */
-static bool LZSS_Decompress(const u8* compressed, u32 compressed_size, u8* decompressed,
-                            u32 decompressed_size) {
-    const u8* footer = compressed + compressed_size - 8;
+static bool LZSS_Decompress(std::span<const u8> compressed, std::span<u8> decompressed) {
+    const u8* footer = compressed.data() + compressed.size() - 8;
 
     u32 buffer_top_and_bottom;
     std::memcpy(&buffer_top_and_bottom, footer, sizeof(u32));
 
-    u32 out = decompressed_size;
-    u32 index = compressed_size - ((buffer_top_and_bottom >> 24) & 0xFF);
-    u32 stop_index = compressed_size - (buffer_top_and_bottom & 0xFFFFFF);
+    std::size_t out = decompressed.size();
+    std::size_t index = compressed.size() - ((buffer_top_and_bottom >> 24) & 0xFF);
+    std::size_t stop_index = compressed.size() - (buffer_top_and_bottom & 0xFFFFFF);
 
-    memset(decompressed, 0, decompressed_size);
-    memcpy(decompressed, compressed, compressed_size);
+    std::memset(decompressed.data(), 0, decompressed.size());
+    std::memcpy(decompressed.data(), compressed.data(), compressed.size());
 
     while (index > stop_index) {
         u8 control = compressed[--index];
@@ -96,7 +92,7 @@ static bool LZSS_Decompress(const u8* compressed, u32 compressed_size, u8* decom
 
                 for (unsigned j = 0; j < segment_size; j++) {
                     // Check if compression is out of bounds
-                    if (out + segment_offset >= decompressed_size)
+                    if (out + segment_offset >= decompressed.size())
                         return false;
 
                     u8 data = decompressed[out + segment_offset];
@@ -119,12 +115,12 @@ NCCHContainer::NCCHContainer(const std::string& filepath, u32 ncch_offset, u32 p
     file = FileUtil::IOFile(filepath, "rb");
 }
 
-Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath, u32 ncch_offset,
-                                             u32 partition) {
-    this->filepath = filepath;
-    this->ncch_offset = ncch_offset;
-    this->partition = partition;
-    file = FileUtil::IOFile(filepath, "rb");
+Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath_, u32 ncch_offset_,
+                                             u32 partition_) {
+    filepath = filepath_;
+    ncch_offset = ncch_offset_;
+    partition = partition_;
+    file = FileUtil::IOFile(filepath_, "rb");
 
     if (!file.IsOpen()) {
         LOG_WARNING(Service_FS, "Failed to open {}", filepath);
@@ -542,14 +538,9 @@ Loader::ResultStatus NCCHContainer::LoadSectionExeFS(const char* name, std::vect
 
             if (strcmp(section.name, ".code") == 0 && is_compressed) {
                 // Section is compressed, read compressed .code section...
-                std::unique_ptr<u8[]> temp_buffer;
-                try {
-                    temp_buffer.reset(new u8[section.size]);
-                } catch (std::bad_alloc&) {
-                    return Loader::ResultStatus::ErrorMemoryAllocationFailed;
-                }
-
-                if (exefs_file.ReadBytes(&temp_buffer[0], section.size) != section.size)
+                std::vector<u8> temp_buffer(section.size);
+                if (exefs_file.ReadBytes(temp_buffer.data(), temp_buffer.size()) !=
+                    temp_buffer.size())
                     return Loader::ResultStatus::Error;
 
                 if (is_encrypted) {
@@ -557,11 +548,10 @@ Loader::ResultStatus NCCHContainer::LoadSectionExeFS(const char* name, std::vect
                 }
 
                 // Decompress .code section...
-                u32 decompressed_size = LZSS_GetDecompressedSize(&temp_buffer[0], section.size);
-                buffer.resize(decompressed_size);
-                if (!LZSS_Decompress(&temp_buffer[0], section.size, buffer.data(),
-                                     decompressed_size))
+                buffer.resize(LZSS_GetDecompressedSize(temp_buffer));
+                if (!LZSS_Decompress(temp_buffer, buffer)) {
                     return Loader::ResultStatus::ErrorInvalidFormat;
+                }
             } else {
                 // Section is uncompressed...
                 buffer.resize(section.size);
@@ -597,12 +587,12 @@ Loader::ResultStatus NCCHContainer::ApplyCodePatch(std::vector<u8>& code) const 
     }};
 
     for (const PatchLocation& info : patch_paths) {
-        FileUtil::IOFile file{info.path, "rb"};
-        if (!file)
+        FileUtil::IOFile patch_file{info.path, "rb"};
+        if (!patch_file)
             continue;
 
-        std::vector<u8> patch(file.GetSize());
-        if (file.ReadBytes(patch.data(), patch.size()) != patch.size())
+        std::vector<u8> patch(patch_file.GetSize());
+        if (patch_file.ReadBytes(patch.data(), patch.size()) != patch.size())
             return Loader::ResultStatus::Error;
 
         LOG_INFO(Service_FS, "File {} patching code.bin", info.path);

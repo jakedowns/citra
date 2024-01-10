@@ -3,16 +3,26 @@
 // Refer to the license.txt file included.
 
 #include <algorithm>
-#include <iostream>
-#include <regex>
+#include <codecvt>
 #include <thread>
+#include <dlfcn.h>
 
 #include <android/api-level.h>
 #include <android/native_window_jni.h>
+#include <core/hw/aes/key.h>
+#include <core/loader/smdh.h>
+#include <core/system_titles.h>
 
+#include <core/hle/service/cfg/cfg.h>
 #include "audio_core/dsp_interface.h"
+#include "common/arch.h"
+#if CITRA_ARCH(arm64)
 #include "common/aarch64/cpu_detect.h"
+#elif CITRA_ARCH(x86_64)
+#include "common/x64/cpu_detect.h"
+#endif
 #include "common/common_paths.h"
+#include "common/dynamic_library/dynamic_library.h"
 #include "common/file_util.h"
 #include "common/logging/backend.h"
 #include "common/logging/log.h"
@@ -24,33 +34,36 @@
 #include "core/core.h"
 #include "core/frontend/applets/default_applets.h"
 #include "core/frontend/camera/factory.h"
-#include "core/frontend/mic.h"
 #include "core/hle/service/am/am.h"
 #include "core/hle/service/nfc/nfc.h"
+#include "core/loader/loader.h"
 #include "core/savestate.h"
+#include "core/telemetry_session.h"
 #include "jni/android_common/android_common.h"
 #include "jni/applets/mii_selector.h"
 #include "jni/applets/swkbd.h"
 #include "jni/camera/ndk_camera.h"
 #include "jni/camera/still_image_camera.h"
 #include "jni/config.h"
-#include "jni/emu_window/emu_window.h"
-#include "jni/game_info.h"
+#include "jni/emu_window/emu_window_gl.h"
+#include "jni/emu_window/emu_window_vk.h"
 #include "jni/game_settings.h"
 #include "jni/id_cache.h"
 #include "jni/input_manager.h"
-#include "jni/lodepng_image_interface.h"
-#include "jni/mic.h"
-#include "jni/native.h"
 #include "jni/ndk_motion.h"
+#include "video_core/debug_utils/debug_utils.h"
+#include "video_core/gpu.h"
 #include "video_core/renderer_base.h"
-#include "video_core/renderer_opengl/texture_filters/texture_filterer.h"
-#include "video_core/video_core.h"
+
+#if CITRA_ARCH(arm64)
+#include <adrenotools/driver.h>
+#endif
 
 namespace {
 
 ANativeWindow* s_surf;
 
+std::shared_ptr<Common::DynamicLibrary> vulkan_library{};
 std::unique_ptr<EmuWindow_Android> window;
 
 std::atomic<bool> stop_run{true};
@@ -61,35 +74,6 @@ std::mutex running_mutex;
 std::condition_variable running_cv;
 
 } // Anonymous namespace
-
-static bool DisplayAlertMessage(const char* caption, const char* text, bool yes_no) {
-    JNIEnv* env = IDCache::GetEnvForThread();
-
-    // Execute the Java method.
-    jboolean result = env->CallStaticBooleanMethod(
-        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertMsg(), ToJString(env, caption),
-        ToJString(env, text), yes_no ? JNI_TRUE : JNI_FALSE);
-
-    return result != JNI_FALSE;
-}
-
-static std::string DisplayAlertPrompt(const char* caption, const char* text, int buttonConfig) {
-    JNIEnv* env = IDCache::GetEnvForThread();
-
-    jstring value = reinterpret_cast<jstring>(env->CallStaticObjectMethod(
-        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertPrompt(), ToJString(env, caption),
-        ToJString(env, text), buttonConfig));
-
-    return GetJString(env, value);
-}
-
-static int AlertPromptButton() {
-    JNIEnv* env = IDCache::GetEnvForThread();
-
-    // Execute the Java method.
-    return static_cast<int>(env->CallStaticIntMethod(IDCache::GetNativeLibraryClass(),
-                                                     IDCache::GetAlertPromptButton()));
-}
 
 static jobject ToJavaCoreError(Core::System::ResultStatus result) {
     static const std::map<Core::System::ResultStatus, const char*> CoreErrorNameMap{
@@ -136,9 +120,14 @@ static void TryShutdown() {
     MicroProfileShutdown();
 }
 
+static bool CheckMicPermission() {
+    return IDCache::GetEnvForThread()->CallStaticBooleanMethod(IDCache::GetNativeLibraryClass(),
+                                                               IDCache::GetRequestMicPermission());
+}
+
 static Core::System::ResultStatus RunCitra(const std::string& filepath) {
     // Citra core only supports a single running instance
-    std::lock_guard<std::mutex> lock(running_mutex);
+    std::scoped_lock lock(running_mutex);
 
     LOG_INFO(Frontend, "Citra starting...");
 
@@ -149,17 +138,20 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
         return Core::System::ResultStatus::ErrorLoader;
     }
 
+    Core::System& system{Core::System::GetInstance()};
+
     const auto graphics_api = Settings::values.graphics_api.GetValue();
     switch (graphics_api) {
     case Settings::GraphicsAPI::OpenGL:
-        window = std::make_unique<EmuWindow_Android>(s_surf);
+        window = std::make_unique<EmuWindow_Android_OpenGL>(system, s_surf);
+        break;
+    case Settings::GraphicsAPI::Vulkan:
+        window = std::make_unique<EmuWindow_Android_Vulkan>(s_surf, vulkan_library);
         break;
     default:
-        LOG_CRITICAL(Frontend, "Unknown graphics API {}, using OpenGL", graphics_api);
-        window = std::make_unique<EmuWindow_Android>(s_surf);
+        LOG_CRITICAL(Frontend, "Unknown graphics API {}, using Vulkan", graphics_api);
+        window = std::make_unique<EmuWindow_Android_Vulkan>(s_surf, vulkan_library);
     }
-
-    Core::System& system{Core::System::GetInstance()};
 
     // Forces a config reload on game boot, if the user changed settings in the UI
     Config{};
@@ -171,7 +163,7 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
         app_loader->ReadProgramId(program_id);
         GameSettings::LoadOverrides(program_id);
     }
-    Settings::Apply();
+    system.ApplySettings();
     Settings::LogSettings();
 
     Camera::RegisterFactory("image", std::make_unique<Camera::StillImage::Factory>());
@@ -181,16 +173,14 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
     Camera::RegisterFactory("ndk", std::move(ndk_factory));
 
     // Register frontend applets
-    Frontend::RegisterDefaultApplets();
+    Frontend::RegisterDefaultApplets(system);
     system.RegisterMiiSelector(std::make_shared<MiiSelector::AndroidMiiSelector>());
     system.RegisterSoftwareKeyboard(std::make_shared<SoftwareKeyboard::AndroidKeyboard>());
 
-    // Register generic image interface
-    Core::System::GetInstance().RegisterImageInterface(std::make_shared<LodePNGImageInterface>());
+    // Register microphone permission check
+    system.RegisterMicPermissionCheck(&CheckMicPermission);
 
-    // Register real Mic factory
-    Frontend::Mic::RegisterRealMicFactory(std::make_unique<Mic::AndroidFactory>());
-
+    Pica::g_debug_context = Pica::DebugContext::Construct();
     InputManager::Init();
 
     window->MakeCurrent();
@@ -199,7 +189,7 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
         return load_result;
     }
 
-    auto& telemetry_session = Core::System::GetInstance().TelemetrySession();
+    auto& telemetry_session = system.TelemetrySession();
     telemetry_session.AddField(Common::Telemetry::FieldType::App, "Frontend", "Android");
 
     stop_run = false;
@@ -208,26 +198,11 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
     LoadDiskCacheProgress(VideoCore::LoadCallbackStage::Prepare, 0, 0);
 
     std::unique_ptr<Frontend::GraphicsContext> cpu_context;
-    system.Renderer().Rasterizer()->LoadDiskResources(stop_run, &LoadDiskCacheProgress);
+    system.GPU().Renderer().Rasterizer()->LoadDiskResources(stop_run, &LoadDiskCacheProgress);
 
     LoadDiskCacheProgress(VideoCore::LoadCallbackStage::Complete, 0, 0);
 
     SCOPE_EXIT({ TryShutdown(); });
-
-    // Audio stretching on Android is only useful with lower framerates, disable it when fullspeed
-    Core::TimingEventType* audio_stretching_event{};
-    const s64 audio_stretching_ticks{msToCycles(500)};
-    audio_stretching_event =
-        system.CoreTiming().RegisterEvent("AudioStretchingEvent", [&](u64, s64 cycles_late) {
-            if (Settings::values.enable_audio_stretching) {
-                Core::DSP().EnableStretching(
-                    Core::System::GetInstance().GetAndResetPerfStats().emulation_speed < 0.95);
-            }
-
-            system.CoreTiming().ScheduleEvent(audio_stretching_ticks - cycles_late,
-                                              audio_stretching_event);
-        });
-    system.CoreTiming().ScheduleEvent(audio_stretching_ticks, audio_stretching_event);
 
     // Start running emulation
     while (!stop_run) {
@@ -252,7 +227,7 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
             SCOPE_EXIT({ Settings::values.volume = volume; });
             Settings::values.volume = 0;
 
-            std::unique_lock<std::mutex> pause_lock(paused_mutex);
+            std::unique_lock pause_lock{paused_mutex};
             running_cv.wait(pause_lock, [] { return !pause_emulation || stop_run; });
             window->PollEvents();
         }
@@ -261,10 +236,41 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
     return Core::System::ResultStatus::Success;
 }
 
+void InitializeGpuDriver(const std::string& hook_lib_dir, const std::string& custom_driver_dir,
+                         const std::string& custom_driver_name,
+                         const std::string& file_redirect_dir) {
+#if CITRA_ARCH(arm64)
+    void* handle{};
+    const char* file_redirect_dir_{};
+    int featureFlags{};
+
+    // Enable driver file redirection when renderer debugging is enabled.
+    if (Settings::values.renderer_debug && file_redirect_dir.size()) {
+        featureFlags |= ADRENOTOOLS_DRIVER_FILE_REDIRECT;
+        file_redirect_dir_ = file_redirect_dir.c_str();
+    }
+
+    // Try to load a custom driver.
+    if (custom_driver_name.size()) {
+        handle = adrenotools_open_libvulkan(
+            RTLD_NOW, featureFlags | ADRENOTOOLS_DRIVER_CUSTOM, nullptr, hook_lib_dir.c_str(),
+            custom_driver_dir.c_str(), custom_driver_name.c_str(), file_redirect_dir_, nullptr);
+    }
+
+    // Try to load the system driver.
+    if (!handle) {
+        handle = adrenotools_open_libvulkan(RTLD_NOW, featureFlags, nullptr, hook_lib_dir.c_str(),
+                                            nullptr, nullptr, file_redirect_dir_, nullptr);
+    }
+
+    vulkan_library = std::make_shared<Common::DynamicLibrary>(handle);
+#endif
+}
+
 extern "C" {
 
-void Java_org_citra_citra_1emu_NativeLibrary_SurfaceChanged(JNIEnv* env,
-                                                            [[maybe_unused]] jclass clazz,
+void Java_org_citra_citra_1emu_NativeLibrary_surfaceChanged(JNIEnv* env,
+                                                            [[maybe_unused]] jobject obj,
                                                             jobject surf) {
     s_surf = ANativeWindow_fromSurface(env, surf);
 
@@ -272,11 +278,16 @@ void Java_org_citra_citra_1emu_NativeLibrary_SurfaceChanged(JNIEnv* env,
         window->OnSurfaceChanged(s_surf);
     }
 
+    auto& system = Core::System::GetInstance();
+    if (system.IsPoweredOn()) {
+        system.GPU().Renderer().NotifySurfaceChanged();
+    }
+
     LOG_INFO(Frontend, "Surface changed");
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_SurfaceDestroyed(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_surfaceDestroyed([[maybe_unused]] JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj) {
     ANativeWindow_release(s_surf);
     s_surf = nullptr;
     if (window) {
@@ -284,42 +295,70 @@ void Java_org_citra_citra_1emu_NativeLibrary_SurfaceDestroyed(JNIEnv* env,
     }
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_DoFrame(JNIEnv* env, [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_doFrame([[maybe_unused]] JNIEnv* env,
+                                                     [[maybe_unused]] jobject obj) {
     if (stop_run || pause_emulation) {
         return;
     }
     window->TryPresenting();
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_NotifyOrientationChange(JNIEnv* env,
-                                                                     [[maybe_unused]] jclass clazz,
+void JNICALL Java_org_citra_citra_1emu_NativeLibrary_initializeGpuDriver(
+    JNIEnv* env, jobject obj, jstring hook_lib_dir, jstring custom_driver_dir,
+    jstring custom_driver_name, jstring file_redirect_dir) {
+    InitializeGpuDriver(GetJString(env, hook_lib_dir), GetJString(env, custom_driver_dir),
+                        GetJString(env, custom_driver_name), GetJString(env, file_redirect_dir));
+}
+
+void Java_org_citra_citra_1emu_NativeLibrary_notifyOrientationChange([[maybe_unused]] JNIEnv* env,
+                                                                     [[maybe_unused]] jobject obj,
                                                                      jint layout_option,
                                                                      jint rotation) {
     Settings::values.layout_option = static_cast<Settings::LayoutOption>(layout_option);
-    if (VideoCore::g_renderer) {
-        VideoCore::g_renderer->UpdateCurrentFramebufferLayout(!(rotation % 2));
+    auto& system = Core::System::GetInstance();
+    if (system.IsPoweredOn()) {
+        system.GPU().Renderer().UpdateCurrentFramebufferLayout(!(rotation % 2));
     }
     InputManager::screen_rotation = rotation;
     Camera::NDK::g_rotation = rotation;
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_SwapScreens(JNIEnv* env, [[maybe_unused]] jclass clazz,
+void Java_org_citra_citra_1emu_NativeLibrary_swapScreens([[maybe_unused]] JNIEnv* env,
+                                                         [[maybe_unused]] jobject obj,
                                                          jboolean swap_screens, jint rotation) {
     Settings::values.swap_screen = swap_screens;
-    if (VideoCore::g_renderer) {
-        VideoCore::g_renderer->UpdateCurrentFramebufferLayout(!(rotation % 2));
+    auto& system = Core::System::GetInstance();
+    if (system.IsPoweredOn()) {
+        system.GPU().Renderer().UpdateCurrentFramebufferLayout(!(rotation % 2));
     }
     InputManager::screen_rotation = rotation;
     Camera::NDK::g_rotation = rotation;
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_SetUserDirectory(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz,
+jboolean Java_org_citra_citra_1emu_NativeLibrary_areKeysAvailable([[maybe_unused]] JNIEnv* env,
+                                                                  [[maybe_unused]] jobject obj) {
+    HW::AES::InitKeys();
+    return HW::AES::IsKeyXAvailable(HW::AES::KeySlotID::NCCHSecure1) &&
+           HW::AES::IsKeyXAvailable(HW::AES::KeySlotID::NCCHSecure2);
+}
+
+jstring Java_org_citra_citra_1emu_NativeLibrary_getHomeMenuPath(JNIEnv* env,
+                                                                [[maybe_unused]] jobject obj,
+                                                                jint region) {
+    const std::string path = Core::GetHomeMenuNcchPath(region);
+    if (FileUtil::Exists(path)) {
+        return ToJString(env, path);
+    }
+    return ToJString(env, "");
+}
+
+void Java_org_citra_citra_1emu_NativeLibrary_setUserDirectory(JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj,
                                                               jstring j_directory) {
     FileUtil::SetCurrentDir(GetJString(env, j_directory));
 }
 
-jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetInstalledGamePaths(
+jobjectArray Java_org_citra_citra_1emu_NativeLibrary_getInstalledGamePaths(
     JNIEnv* env, [[maybe_unused]] jclass clazz) {
     std::vector<std::string> games;
     const FileUtil::DirectoryEntryCallable ScanDir =
@@ -357,37 +396,87 @@ jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetInstalledGamePaths(
     return jgames;
 }
 
+jlongArray Java_org_citra_citra_1emu_NativeLibrary_getSystemTitleIds(JNIEnv* env,
+                                                                     [[maybe_unused]] jobject obj,
+                                                                     jint system_type,
+                                                                     jint region) {
+    const auto mode = static_cast<Core::SystemTitleSet>(system_type);
+    const std::vector<u64> titles = Core::GetSystemTitleIds(mode, region);
+    jlongArray jTitles = env->NewLongArray(titles.size());
+    env->SetLongArrayRegion(jTitles, 0, titles.size(),
+                            reinterpret_cast<const jlong*>(titles.data()));
+    return jTitles;
+}
+
+jobject Java_org_citra_citra_1emu_NativeLibrary_downloadTitleFromNus([[maybe_unused]] JNIEnv* env,
+                                                                     [[maybe_unused]] jobject obj,
+                                                                     jlong title) {
+    const auto title_id = static_cast<u64>(title);
+    Service::AM::InstallStatus status = Service::AM::InstallFromNus(title_id);
+    if (status != Service::AM::InstallStatus::Success) {
+        return IDCache::GetJavaCiaInstallStatus(status);
+    }
+    return IDCache::GetJavaCiaInstallStatus(Service::AM::InstallStatus::Success);
+}
+
+[[maybe_unused]] static bool CheckKgslPresent() {
+    constexpr auto KgslPath{"/dev/kgsl-3d0"};
+
+    return access(KgslPath, F_OK) == 0;
+}
+
+[[maybe_unused]] bool SupportsCustomDriver() {
+    return android_get_device_api_level() >= 28 && CheckKgslPresent();
+}
+
+jboolean JNICALL Java_org_citra_citra_1emu_utils_GpuDriverHelper_supportsCustomDriverLoading(
+    JNIEnv* env, jobject instance) {
+#ifdef CITRA_ARCH_arm64
+    // If the KGSL device exists custom drivers can be loaded using adrenotools
+    return SupportsCustomDriver();
+#else
+    return false;
+#endif
+}
+
 // TODO(xperia64): ensure these cannot be called in an invalid state (e.g. after StopEmulation)
-void Java_org_citra_citra_1emu_NativeLibrary_UnPauseEmulation(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_unPauseEmulation([[maybe_unused]] JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj) {
     pause_emulation = false;
     running_cv.notify_all();
     InputManager::NDKMotionHandler()->EnableSensors();
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_PauseEmulation(JNIEnv* env,
-                                                            [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_pauseEmulation([[maybe_unused]] JNIEnv* env,
+                                                            [[maybe_unused]] jobject obj) {
     pause_emulation = true;
     InputManager::NDKMotionHandler()->DisableSensors();
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_StopEmulation(JNIEnv* env,
-                                                           [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_stopEmulation([[maybe_unused]] JNIEnv* env,
+                                                           [[maybe_unused]] jobject obj) {
     stop_run = true;
     pause_emulation = false;
     window->StopPresenting();
     running_cv.notify_all();
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_IsRunning(JNIEnv* env,
-                                                           [[maybe_unused]] jclass clazz) {
+jboolean Java_org_citra_citra_1emu_NativeLibrary_isRunning([[maybe_unused]] JNIEnv* env,
+                                                           [[maybe_unused]] jobject obj) {
     return static_cast<jboolean>(!stop_run);
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadEvent(JNIEnv* env,
-                                                                [[maybe_unused]] jclass clazz,
-                                                                jstring j_device, jint j_button,
-                                                                jint action) {
+jlong Java_org_citra_citra_1emu_NativeLibrary_getRunningTitleId([[maybe_unused]] JNIEnv* env,
+                                                                [[maybe_unused]] jobject obj) {
+    u64 title_id{};
+    Core::System::GetInstance().GetAppLoader().ReadProgramId(title_id);
+    return static_cast<jlong>(title_id);
+}
+
+jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadEvent([[maybe_unused]] JNIEnv* env,
+                                                                [[maybe_unused]] jobject obj,
+                                                                [[maybe_unused]] jstring j_device,
+                                                                jint j_button, jint action) {
     bool consumed{};
     if (action) {
         consumed = InputManager::ButtonHandler()->PressKey(j_button);
@@ -398,10 +487,9 @@ jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadEvent(JNIEnv* env,
     return static_cast<jboolean>(consumed);
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadMoveEvent(JNIEnv* env,
-                                                                    [[maybe_unused]] jclass clazz,
-                                                                    jstring j_device, jint axis,
-                                                                    jfloat x, jfloat y) {
+jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadMoveEvent(
+    [[maybe_unused]] JNIEnv* env, [[maybe_unused]] jobject obj, [[maybe_unused]] jstring j_device,
+    jint axis, jfloat x, jfloat y) {
     // Clamp joystick movement to supported minimum and maximum
     // Citra uses an inverted y axis sent by the frontend
     x = std::clamp(x, -1.f, 1.f);
@@ -418,120 +506,77 @@ jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadMoveEvent(JNIEnv* env,
     return static_cast<jboolean>(InputManager::AnalogHandler()->MoveJoystick(axis, x, y));
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadAxisEvent(JNIEnv* env,
-                                                                    [[maybe_unused]] jclass clazz,
-                                                                    jstring j_device, jint axis_id,
-                                                                    jfloat axis_val) {
+jboolean Java_org_citra_citra_1emu_NativeLibrary_onGamePadAxisEvent(
+    [[maybe_unused]] JNIEnv* env, [[maybe_unused]] jobject obj, [[maybe_unused]] jstring j_device,
+    jint axis_id, jfloat axis_val) {
     return static_cast<jboolean>(
         InputManager::ButtonHandler()->AnalogButtonEvent(axis_id, axis_val));
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_onTouchEvent(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz,
+jboolean Java_org_citra_citra_1emu_NativeLibrary_onTouchEvent([[maybe_unused]] JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj,
                                                               jfloat x, jfloat y,
                                                               jboolean pressed) {
     return static_cast<jboolean>(
         window->OnTouchEvent(static_cast<int>(x + 0.5), static_cast<int>(y + 0.5), pressed));
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_onTouchMoved(JNIEnv* env,
-                                                          [[maybe_unused]] jclass clazz, jfloat x,
+void Java_org_citra_citra_1emu_NativeLibrary_onTouchMoved([[maybe_unused]] JNIEnv* env,
+                                                          [[maybe_unused]] jobject obj, jfloat x,
                                                           jfloat y) {
     window->OnTouchMoved((int)x, (int)y);
 }
 
-jintArray Java_org_citra_citra_1emu_NativeLibrary_GetIcon(JNIEnv* env,
-                                                          [[maybe_unused]] jclass clazz,
-                                                          jstring j_file) {
-    std::string filepath = GetJString(env, j_file);
-
-    std::vector<u16> icon_data = GameInfo::GetIcon(filepath);
-    if (icon_data.size() == 0) {
-        return 0;
-    }
-
-    jintArray icon = env->NewIntArray(static_cast<jsize>(icon_data.size() / 2));
-    env->SetIntArrayRegion(icon, 0, env->GetArrayLength(icon),
-                           reinterpret_cast<jint*>(icon_data.data()));
-
-    return icon;
-}
-
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetTitle(JNIEnv* env, [[maybe_unused]] jclass clazz,
+jlong Java_org_citra_citra_1emu_NativeLibrary_getTitleId(JNIEnv* env, [[maybe_unused]] jobject obj,
                                                          jstring j_filename) {
     std::string filepath = GetJString(env, j_filename);
-    auto Title = GameInfo::GetTitle(filepath);
-    return env->NewStringUTF(Common::UTF16ToUTF8(Title).data());
+    const auto loader = Loader::GetLoader(filepath);
+
+    u64 title_id{};
+    if (loader) {
+        loader->ReadProgramId(title_id);
+    }
+    return static_cast<jlong>(title_id);
 }
 
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetDescription(JNIEnv* env,
-                                                               [[maybe_unused]] jclass clazz,
-                                                               jstring j_filename) {
-    return j_filename;
+jboolean Java_org_citra_citra_1emu_NativeLibrary_getIsSystemTitle(JNIEnv* env,
+                                                                  [[maybe_unused]] jobject obj,
+                                                                  jstring path) {
+    const std::string filepath = GetJString(env, path);
+    const auto loader = Loader::GetLoader(filepath);
+
+    // Since we also read through invalid file extensions, we have to check if the loader is valid
+    if (loader == nullptr) {
+        return false;
+    }
+
+    u64 program_id = 0;
+    loader->ReadProgramId(program_id);
+    return ((program_id >> 32) & 0xFFFFFFFF) == 0x00040010;
 }
 
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetGameId(JNIEnv* env,
-                                                          [[maybe_unused]] jclass clazz,
-                                                          jstring j_filename) {
-    return j_filename;
-}
-
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetRegions(JNIEnv* env,
-                                                           [[maybe_unused]] jclass clazz,
-                                                           jstring j_filename) {
-    std::string filepath = GetJString(env, j_filename);
-
-    std::string regions = GameInfo::GetRegions(filepath);
-
-    return env->NewStringUTF(regions.c_str());
-}
-
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetCompany(JNIEnv* env,
-                                                           [[maybe_unused]] jclass clazz,
-                                                           jstring j_filename) {
-    std::string filepath = GetJString(env, j_filename);
-    auto publisher = GameInfo::GetPublisher(filepath);
-    return env->NewStringUTF(Common::UTF16ToUTF8(publisher).data());
-}
-
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetGitRevision(JNIEnv* env,
-                                                               [[maybe_unused]] jclass clazz) {
-    return nullptr;
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_CreateConfigFile(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_createConfigFile([[maybe_unused]] JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj) {
     Config{};
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_CreateLogFile(JNIEnv* env,
-                                                           [[maybe_unused]] jclass clazz) {
-    Log::RemoveBackend(Log::FileBackend::Name());
-    FileUtil::CreateFullPath(FileUtil::GetUserPath(FileUtil::UserPath::LogDir));
-    Log::AddBackend(std::make_unique<Log::FileBackend>(
-        FileUtil::GetUserPath(FileUtil::UserPath::LogDir) + LOG_FILE));
+void Java_org_citra_citra_1emu_NativeLibrary_createLogFile([[maybe_unused]] JNIEnv* env,
+                                                           [[maybe_unused]] jobject obj) {
+    Common::Log::Initialize();
+    Common::Log::Start();
     LOG_INFO(Frontend, "Logging backend initialised");
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_LogUserDirectory(JNIEnv* env,
-                                                              [[maybe_unused]] jclass clazz,
+void Java_org_citra_citra_1emu_NativeLibrary_logUserDirectory(JNIEnv* env,
+                                                              [[maybe_unused]] jobject obj,
                                                               jstring j_path) {
     std::string_view path = env->GetStringUTFChars(j_path, 0);
     LOG_INFO(Frontend, "User directory path: {}", path);
     env->ReleaseStringUTFChars(j_path, path.data());
 }
 
-jint Java_org_citra_citra_1emu_NativeLibrary_DefaultCPUCore(JNIEnv* env,
-                                                            [[maybe_unused]] jclass clazz) {
-    return 0;
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_Run__Ljava_lang_String_2Ljava_lang_String_2Z(
-    JNIEnv* env, [[maybe_unused]] jclass clazz, jstring j_file, jstring j_savestate,
-    jboolean j_delete_savestate) {}
-
-void Java_org_citra_citra_1emu_NativeLibrary_ReloadSettings(JNIEnv* env,
-                                                            [[maybe_unused]] jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_reloadSettings([[maybe_unused]] JNIEnv* env,
+                                                            [[maybe_unused]] jobject obj) {
     Config{};
     Core::System& system{Core::System::GetInstance()};
 
@@ -542,54 +587,11 @@ void Java_org_citra_citra_1emu_NativeLibrary_ReloadSettings(JNIEnv* env,
         GameSettings::LoadOverrides(program_id);
     }
 
-    Settings::Apply();
+    system.ApplySettings();
 }
 
-jstring Java_org_citra_citra_1emu_NativeLibrary_GetUserSetting(JNIEnv* env,
-                                                               [[maybe_unused]] jclass clazz,
-                                                               jstring j_game_id, jstring j_section,
-                                                               jstring j_key) {
-    std::string_view game_id = env->GetStringUTFChars(j_game_id, 0);
-    std::string_view section = env->GetStringUTFChars(j_section, 0);
-    std::string_view key = env->GetStringUTFChars(j_key, 0);
-
-    // TODO
-
-    env->ReleaseStringUTFChars(j_game_id, game_id.data());
-    env->ReleaseStringUTFChars(j_section, section.data());
-    env->ReleaseStringUTFChars(j_key, key.data());
-
-    return env->NewStringUTF("");
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_SetUserSetting(JNIEnv* env,
-                                                            [[maybe_unused]] jclass clazz,
-                                                            jstring j_game_id, jstring j_section,
-                                                            jstring j_key, jstring j_value) {
-    std::string_view game_id = env->GetStringUTFChars(j_game_id, 0);
-    std::string_view section = env->GetStringUTFChars(j_section, 0);
-    std::string_view key = env->GetStringUTFChars(j_key, 0);
-    std::string_view value = env->GetStringUTFChars(j_value, 0);
-
-    // TODO
-
-    env->ReleaseStringUTFChars(j_game_id, game_id.data());
-    env->ReleaseStringUTFChars(j_section, section.data());
-    env->ReleaseStringUTFChars(j_key, key.data());
-    env->ReleaseStringUTFChars(j_value, value.data());
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_InitGameIni(JNIEnv* env, [[maybe_unused]] jclass clazz,
-                                                         jstring j_game_id) {
-    std::string_view game_id = env->GetStringUTFChars(j_game_id, 0);
-
-    // TODO
-
-    env->ReleaseStringUTFChars(j_game_id, game_id.data());
-}
-
-jdoubleArray Java_org_citra_citra_1emu_NativeLibrary_GetPerfStats(JNIEnv* env,
-                                                                  [[maybe_unused]] jclass clazz) {
+jdoubleArray Java_org_citra_citra_1emu_NativeLibrary_getPerfStats(JNIEnv* env,
+                                                                  [[maybe_unused]] jobject obj) {
     auto& core = Core::System::GetInstance();
     jdoubleArray j_stats = env->NewDoubleArray(4);
 
@@ -606,15 +608,8 @@ jdoubleArray Java_org_citra_citra_1emu_NativeLibrary_GetPerfStats(JNIEnv* env,
     return j_stats;
 }
 
-void Java_org_citra_citra_1emu_utils_DirectoryInitialization_SetSysDirectory(
-    JNIEnv* env, [[maybe_unused]] jclass clazz, jstring j_path) {
-    std::string_view path = env->GetStringUTFChars(j_path, 0);
-
-    env->ReleaseStringUTFChars(j_path, path.data());
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_Run__Ljava_lang_String_2(JNIEnv* env,
-                                                                      [[maybe_unused]] jclass clazz,
+void Java_org_citra_citra_1emu_NativeLibrary_run__Ljava_lang_String_2(JNIEnv* env,
+                                                                      [[maybe_unused]] jobject obj,
                                                                       jstring j_path) {
     const std::string path = GetJString(env, j_path);
 
@@ -630,41 +625,29 @@ void Java_org_citra_citra_1emu_NativeLibrary_Run__Ljava_lang_String_2(JNIEnv* en
     }
 }
 
-jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetTextureFilterNames(JNIEnv* env,
-                                                                           jclass clazz) {
-    auto names = OpenGL::TextureFilterer::GetFilterNames();
-    jobjectArray ret = (jobjectArray)env->NewObjectArray(static_cast<jsize>(names.size()),
-                                                         env->FindClass("java/lang/String"),
-                                                         env->NewStringUTF(""));
-    for (jsize i = 0; i < names.size(); ++i)
-        env->SetObjectArrayElement(ret, i, env->NewStringUTF(names[i].data()));
-    return ret;
-}
-
-void Java_org_citra_citra_1emu_NativeLibrary_ReloadCameraDevices(JNIEnv* env, jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_reloadCameraDevices([[maybe_unused]] JNIEnv* env,
+                                                                 [[maybe_unused]] jobject obj) {
     if (g_ndk_factory) {
         g_ndk_factory->ReloadCameraDevices();
     }
 }
 
-jboolean Java_org_citra_citra_1emu_NativeLibrary_LoadAmiibo(JNIEnv* env, jclass clazz,
-                                                            jbyteArray bytes) {
+jboolean Java_org_citra_citra_1emu_NativeLibrary_loadAmiibo(JNIEnv* env,
+                                                            [[maybe_unused]] jobject obj,
+                                                            jstring j_file) {
+    std::string filepath = GetJString(env, j_file);
     Core::System& system{Core::System::GetInstance()};
     Service::SM::ServiceManager& sm = system.ServiceManager();
     auto nfc = sm.GetService<Service::NFC::Module::Interface>("nfc:u");
-    if (nfc == nullptr || env->GetArrayLength(bytes) != sizeof(Service::NFC::AmiiboData)) {
+    if (nfc == nullptr) {
         return static_cast<jboolean>(false);
     }
 
-    Service::NFC::AmiiboData amiibo_data{};
-    env->GetByteArrayRegion(bytes, 0, sizeof(Service::NFC::AmiiboData),
-                            reinterpret_cast<jbyte*>(&amiibo_data));
-
-    nfc->LoadAmiibo(amiibo_data);
-    return static_cast<jboolean>(true);
+    return static_cast<jboolean>(nfc->LoadAmiibo(filepath));
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_RemoveAmiibo(JNIEnv* env, jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_removeAmiibo([[maybe_unused]] JNIEnv* env,
+                                                          [[maybe_unused]] jobject obj) {
     Core::System& system{Core::System::GetInstance()};
     Service::SM::ServiceManager& sm = system.ServiceManager();
     auto nfc = sm.GetService<Service::NFC::Module::Interface>("nfc:u");
@@ -675,32 +658,20 @@ void Java_org_citra_citra_1emu_NativeLibrary_RemoveAmiibo(JNIEnv* env, jclass cl
     nfc->RemoveAmiibo();
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_InstallCIAS(JNIEnv* env, [[maybe_unused]] jclass clazz,
-                                                         jobjectArray path) {
-    const jsize count{env->GetArrayLength(path)};
-    std::vector<std::string> paths;
-    for (jsize idx{0}; idx < count; ++idx) {
-        paths.emplace_back(
-            GetJString(env, static_cast<jstring>(env->GetObjectArrayElement(path, idx))));
-    }
-    std::atomic<jsize> idx{count};
-    std::vector<std::thread> threads;
-    std::generate_n(std::back_inserter(threads),
-                    std::min<jsize>(std::thread::hardware_concurrency(), count), [&] {
-                        return std::thread{[&idx, &paths, env] {
-                            jsize work_idx;
-                            while ((work_idx = --idx) >= 0) {
-                                LOG_INFO(Frontend, "Installing CIA {}", work_idx);
-                                Service::AM::InstallCIA(paths[work_idx]);
-                            }
-                        }};
-                    });
-    for (auto& thread : threads)
-        thread.join();
+JNIEXPORT jobject JNICALL Java_org_citra_citra_1emu_utils_CiaInstallWorker_installCIA(
+    JNIEnv* env, jobject jobj, jstring jpath) {
+    std::string path = GetJString(env, jpath);
+    Service::AM::InstallStatus res = Service::AM::InstallCIA(
+        path, [env, jobj](std::size_t total_bytes_read, std::size_t file_size) {
+            env->CallVoidMethod(jobj, IDCache::GetCiaInstallHelperSetProgress(),
+                                static_cast<jint>(file_size), static_cast<jint>(total_bytes_read));
+        });
+
+    return IDCache::GetJavaCiaInstallStatus(res);
 }
 
-jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetSavestateInfo(
-    JNIEnv* env, [[maybe_unused]] jclass clazz) {
+jobjectArray Java_org_citra_citra_1emu_NativeLibrary_getSavestateInfo(
+    JNIEnv* env, [[maybe_unused]] jobject obj) {
     const jclass date_class = env->FindClass("java/util/Date");
     const auto date_constructor = env->GetMethodID(date_class, "<init>", "(J)V");
 
@@ -718,7 +689,7 @@ jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetSavestateInfo(
         return nullptr;
     }
 
-    const auto savestates = Core::ListSaveStates(title_id);
+    const auto savestates = Core::ListSaveStates(title_id, system.Movie().GetCurrentMovieID());
     const jobjectArray array =
         env->NewObjectArray(static_cast<jsize>(savestates.size()), savestate_info_class, nullptr);
     for (std::size_t i = 0; i < savestates.size(); ++i) {
@@ -733,15 +704,18 @@ jobjectArray Java_org_citra_citra_1emu_NativeLibrary_GetSavestateInfo(
     return array;
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_SaveState(JNIEnv* env, jclass clazz, jint slot) {
+void Java_org_citra_citra_1emu_NativeLibrary_saveState([[maybe_unused]] JNIEnv* env,
+                                                       [[maybe_unused]] jobject obj, jint slot) {
     Core::System::GetInstance().SendSignal(Core::System::Signal::Save, slot);
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_LoadState(JNIEnv* env, jclass clazz, jint slot) {
+void Java_org_citra_citra_1emu_NativeLibrary_loadState([[maybe_unused]] JNIEnv* env,
+                                                       [[maybe_unused]] jobject obj, jint slot) {
     Core::System::GetInstance().SendSignal(Core::System::Signal::Load, slot);
 }
 
-void Java_org_citra_citra_1emu_NativeLibrary_LogDeviceInfo(JNIEnv* env, jclass clazz) {
+void Java_org_citra_citra_1emu_NativeLibrary_logDeviceInfo([[maybe_unused]] JNIEnv* env,
+                                                           [[maybe_unused]] jobject obj) {
     LOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_fullname, Common::g_scm_branch,
              Common::g_scm_desc);
     LOG_INFO(Frontend, "Host CPU: {}", Common::GetCPUCaps().cpu_string);

@@ -6,6 +6,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include "common/assert.h"
 #include "common/settings.h"
 
 namespace ConfigurationShared {
@@ -78,16 +79,11 @@ void SetPerGameSetting(QComboBox* combobox,
                                                            ConfigurationShared::USE_GLOBAL_OFFSET);
 }
 
-/// Specialization for string settings
-template <>
-void SetPerGameSetting(QComboBox* combobox,
-                       const Settings::SwitchableSetting<std::string>* setting);
-
 /// Given an index of a combobox setting extracts the setting taking into
 /// account per-game status
 template <typename Type, bool ranged>
 Type GetComboboxSetting(int index, const Settings::SwitchableSetting<Type, ranged>* setting) {
-    if (Settings::IsConfiguringGlobal() && setting->UsingGlobal()) {
+    if (Settings::IsConfiguringGlobal() || setting->UsingGlobal()) {
         return static_cast<Type>(index);
     } else if (!Settings::IsConfiguringGlobal()) {
         if (index == 0) {
@@ -96,6 +92,7 @@ Type GetComboboxSetting(int index, const Settings::SwitchableSetting<Type, range
             return static_cast<Type>(index - ConfigurationShared::USE_GLOBAL_OFFSET);
         }
     }
+    UNREACHABLE();
 }
 
 /// Given a Qt widget sets the background color to indicate whether the setting

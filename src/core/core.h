@@ -8,22 +8,22 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <boost/optional.hpp>
 #include <boost/serialization/version.hpp>
 #include "common/common_types.h"
-#include "core/custom_tex_cache.h"
-#include "core/frontend/applets/mii_selector.h"
-#include "core/frontend/applets/swkbd.h"
-#include "core/frontend/image_interface.h"
-#include "core/loader/loader.h"
-#include "core/memory.h"
+#include "core/arm/arm_interface.h"
+#include "core/cheats/cheats.h"
+#include "core/hle/service/apt/applet_manager.h"
+#include "core/hle/service/plgldr/plgldr.h"
+#include "core/movie.h"
 #include "core/perf_stats.h"
-#include "core/telemetry_session.h"
-
-class ARM_Interface;
 
 namespace Frontend {
 class EmuWindow;
-}
+class ImageInterface;
+class MiiSelector;
+class SoftwareKeyboard;
+} // namespace Frontend
 
 namespace Memory {
 class MemorySystem;
@@ -33,8 +33,8 @@ namespace AudioCore {
 class DspInterface;
 }
 
-namespace RPC {
-class RPCServer;
+namespace Core::RPC {
+class Server;
 }
 
 namespace Service {
@@ -48,22 +48,31 @@ class ArchiveManager;
 
 namespace Kernel {
 class KernelSystem;
-}
-
-namespace Cheats {
-class CheatEngine;
-}
+struct New3dsHwCapabilities;
+enum class MemoryMode : u8;
+} // namespace Kernel
 
 namespace VideoDumper {
 class Backend;
 }
 
 namespace VideoCore {
-class RendererBase;
+class CustomTexManager;
+class GPU;
+} // namespace VideoCore
+
+namespace Pica {
+class DebugContext;
+}
+
+namespace Loader {
+class AppLoader;
 }
 
 namespace Core {
 
+class ARM_Interface;
+class TelemetrySession;
 class ExclusiveMonitor;
 class Timing;
 
@@ -95,6 +104,7 @@ public:
         ErrorUnknown               ///< Any other error
     };
 
+    explicit System();
     ~System();
 
     /**
@@ -168,6 +178,8 @@ public:
 
     [[nodiscard]] PerfStats::Results GetAndResetPerfStats();
 
+    [[nodiscard]] PerfStats::Results GetLastPerfStats();
+
     /**
      * Gets a reference to the emulated CPU.
      * @returns A reference to the emulated CPU.
@@ -184,6 +196,10 @@ public:
      */
 
     [[nodiscard]] ARM_Interface& GetCore(u32 core_id) {
+        return *cpu_cores[core_id];
+    };
+
+    [[nodiscard]] const ARM_Interface& GetCore(u32 core_id) const {
         return *cpu_cores[core_id];
     };
 
@@ -205,7 +221,7 @@ public:
         return *dsp_core;
     }
 
-    [[nodiscard]] VideoCore::RendererBase& Renderer();
+    [[nodiscard]] VideoCore::GPU& GPU();
 
     /**
      * Gets a reference to the service manager.
@@ -253,16 +269,24 @@ public:
     [[nodiscard]] const Cheats::CheatEngine& CheatEngine() const;
 
     /// Gets a reference to the custom texture cache system
-    [[nodiscard]] Core::CustomTexCache& CustomTexCache();
+    [[nodiscard]] VideoCore::CustomTexManager& CustomTexManager();
 
     /// Gets a const reference to the custom texture cache system
-    [[nodiscard]] const Core::CustomTexCache& CustomTexCache() const;
+    [[nodiscard]] const VideoCore::CustomTexManager& CustomTexManager() const;
 
-    /// Gets a reference to the video dumper backend
-    [[nodiscard]] VideoDumper::Backend& VideoDumper();
+    /// Gets a reference to the movie recorder
+    [[nodiscard]] Core::Movie& Movie();
 
-    /// Gets a const reference to the video dumper backend
-    [[nodiscard]] const VideoDumper::Backend& VideoDumper() const;
+    /// Gets a const reference to the movie recorder
+    [[nodiscard]] const Core::Movie& Movie() const;
+
+    /// Video Dumper interface
+
+    void RegisterVideoDumper(std::shared_ptr<VideoDumper::Backend> video_dumper);
+
+    [[nodiscard]] std::shared_ptr<VideoDumper::Backend> GetVideoDumper() const {
+        return video_dumper;
+    }
 
     std::unique_ptr<PerfStats> perf_stats;
     FrameLimiter frame_limiter;
@@ -304,6 +328,17 @@ public:
         return registered_image_interface;
     }
 
+    /// Function for checking OS microphone permissions.
+
+    void RegisterMicPermissionCheck(const std::function<bool()>& permission_func) {
+        mic_permission_func = permission_func;
+    }
+
+    [[nodiscard]] bool HasMicPermission() {
+        return !mic_permission_func || mic_permission_granted ||
+               (mic_permission_granted = mic_permission_func());
+    }
+
     void SaveState(u32 slot) const;
 
     void LoadState(u32 slot);
@@ -317,6 +352,9 @@ public:
         return false;
     }
 
+    /// Applies any changes to settings to this core instance.
+    void ApplySettings();
+
 private:
     /**
      * Initialize the emulated system.
@@ -326,8 +364,10 @@ private:
      * @return ResultStatus code, indicating if the operation succeeded.
      */
     [[nodiscard]] ResultStatus Init(Frontend::EmuWindow& emu_window,
-                                    Frontend::EmuWindow* secondary_window, u32 system_mode,
-                                    u8 n3ds_mode, u32 num_cores);
+                                    Frontend::EmuWindow* secondary_window,
+                                    Kernel::MemoryMode memory_mode,
+                                    const Kernel::New3dsHwCapabilities& n3ds_hw_caps,
+                                    u32 num_cores);
 
     /// Reschedule the core emulation
     void Reschedule();
@@ -348,6 +388,8 @@ private:
     /// Telemetry session for this emulation session
     std::unique_ptr<Core::TelemetrySession> telemetry_session;
 
+    std::unique_ptr<VideoCore::GPU> gpu;
+
     /// Service manager
     std::unique_ptr<Service::SM::ServiceManager> service_manager;
 
@@ -355,20 +397,25 @@ private:
     std::shared_ptr<Frontend::MiiSelector> registered_mii_selector;
     std::shared_ptr<Frontend::SoftwareKeyboard> registered_swkbd;
 
+    /// Movie recorder
+    Core::Movie movie;
+
     /// Cheats manager
-    std::unique_ptr<Cheats::CheatEngine> cheat_engine;
+    Cheats::CheatEngine cheat_engine;
 
     /// Video dumper backend
-    std::unique_ptr<VideoDumper::Backend> video_dumper;
+    std::shared_ptr<VideoDumper::Backend> video_dumper;
 
     /// Custom texture cache system
-    std::unique_ptr<Core::CustomTexCache> custom_tex_cache;
+    std::unique_ptr<VideoCore::CustomTexManager> custom_tex_manager;
 
     /// Image interface
     std::shared_ptr<Frontend::ImageInterface> registered_image_interface;
 
+#ifdef ENABLE_SCRIPTING
     /// RPC Server for scripting support
-    std::unique_ptr<RPC::RPCServer> rpc_server;
+    std::unique_ptr<RPC::Server> rpc_server;
+#endif
 
     std::unique_ptr<Service::FS::ArchiveManager> archive_manager;
 
@@ -397,6 +444,12 @@ private:
     Signal current_signal;
     u32 signal_param;
 
+    std::function<bool()> mic_permission_func;
+    bool mic_permission_granted = false;
+
+    boost::optional<Service::APT::DeliverArg> restore_deliver_arg;
+    boost::optional<Service::PLGLDR::PLG_LDR::PluginLoaderContext> restore_plugin_context;
+
     friend class boost::serialization::access;
     template <typename Archive>
     void serialize(Archive& ar, const unsigned int file_version);
@@ -412,10 +465,6 @@ private:
 
 [[nodiscard]] inline u32 GetNumCores() {
     return System::GetInstance().GetNumCores();
-}
-
-[[nodiscard]] inline AudioCore::DspInterface& DSP() {
-    return System::GetInstance().DSP();
 }
 
 } // namespace Core

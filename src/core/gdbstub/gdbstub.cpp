@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <climits>
 #include <csignal>
 #include <cstdarg>
 #include <cstdio>
@@ -37,7 +36,6 @@
 #include "core/gdbstub/gdbstub.h"
 #include "core/gdbstub/hio.h"
 #include "core/hle/kernel/process.h"
-#include "core/loader/loader.h"
 #include "core/memory.h"
 
 namespace GDBStub {
@@ -181,9 +179,9 @@ static u32 RegRead(std::size_t id, Kernel::Thread* thread = nullptr) {
     }
 
     if (id <= PC_REGISTER) {
-        return thread->context->GetCpuRegister(id);
+        return thread->context.cpu_registers[id];
     } else if (id == CPSR_REGISTER) {
-        return thread->context->GetCpsr();
+        return thread->context.cpsr;
     } else {
         return 0;
     }
@@ -195,9 +193,9 @@ static void RegWrite(std::size_t id, u32 val, Kernel::Thread* thread = nullptr) 
     }
 
     if (id <= PC_REGISTER) {
-        return thread->context->SetCpuRegister(id, val);
+        thread->context.cpu_registers[id] = val;
     } else if (id == CPSR_REGISTER) {
-        return thread->context->SetCpsr(val);
+        thread->context.cpsr = val;
     }
 }
 
@@ -207,11 +205,11 @@ static u64 FpuRead(std::size_t id, Kernel::Thread* thread = nullptr) {
     }
 
     if (id >= D0_REGISTER && id < FPSCR_REGISTER) {
-        u64 ret = thread->context->GetFpuRegister(2 * (id - D0_REGISTER));
-        ret |= static_cast<u64>(thread->context->GetFpuRegister(2 * (id - D0_REGISTER) + 1)) << 32;
+        u64 ret = thread->context.fpu_registers[2 * (id - D0_REGISTER)];
+        ret |= static_cast<u64>(thread->context.fpu_registers[2 * (id - D0_REGISTER) + 1]) << 32;
         return ret;
     } else if (id == FPSCR_REGISTER) {
-        return thread->context->GetFpscr();
+        return thread->context.fpscr;
     } else {
         return 0;
     }
@@ -223,10 +221,10 @@ static void FpuWrite(std::size_t id, u64 val, Kernel::Thread* thread = nullptr) 
     }
 
     if (id >= D0_REGISTER && id < FPSCR_REGISTER) {
-        thread->context->SetFpuRegister(2 * (id - D0_REGISTER), static_cast<u32>(val));
-        thread->context->SetFpuRegister(2 * (id - D0_REGISTER) + 1, static_cast<u32>(val >> 32));
+        thread->context.fpu_registers[2 * (id - D0_REGISTER)] = static_cast<u32>(val);
+        thread->context.fpu_registers[2 * (id - D0_REGISTER) + 1] = static_cast<u32>(val >> 32);
     } else if (id == FPSCR_REGISTER) {
-        return thread->context->SetFpscr(static_cast<u32>(val));
+        thread->context.fpscr = static_cast<u32>(val);
     }
 }
 
@@ -492,7 +490,7 @@ void SendReply(const char* reply) {
         return;
     }
 
-    memset(command_buffer, 0, sizeof(command_buffer));
+    std::memset(command_buffer, 0, sizeof(command_buffer));
 
     command_length = static_cast<u32>(strlen(reply));
     if (command_length + 4 > sizeof(command_buffer)) {
@@ -500,7 +498,7 @@ void SendReply(const char* reply) {
         return;
     }
 
-    memcpy(command_buffer + 1, reply, command_length);
+    std::memcpy(command_buffer + 1, reply, command_length);
 
     u8 checksum = CalculateChecksum(command_buffer, command_length + 1);
     command_buffer[0] = GDB_STUB_START;
@@ -511,7 +509,8 @@ void SendReply(const char* reply) {
     u8* ptr = command_buffer;
     u32 left = command_length + 4;
     while (left > 0) {
-        int sent_size = send(gdbserver_socket, reinterpret_cast<char*>(ptr), left, 0);
+        s32 sent_size =
+            static_cast<s32>(send(gdbserver_socket, reinterpret_cast<char*>(ptr), left, 0));
         if (sent_size < 0) {
             LOG_ERROR(Debug_GDBStub, "gdb: send failed");
             return Shutdown();
@@ -640,7 +639,7 @@ static void SendSignal(Kernel::Thread* thread, u32 signal, bool full = true) {
 /// Read command from gdb client.
 static void ReadCommand() {
     command_length = 0;
-    memset(command_buffer, 0, sizeof(command_buffer));
+    std::memset(command_buffer, 0, sizeof(command_buffer));
 
     u8 c = ReadByte();
     if (c == GDB_STUB_ACK) {
@@ -712,7 +711,7 @@ static bool IsDataAvailable() {
 /// Send requested register to gdb client.
 static void ReadRegister() {
     static u8 reply[64];
-    memset(reply, 0, sizeof(reply));
+    std::memset(reply, 0, sizeof(reply));
 
     u32 id = HexCharToValue(command_buffer[1]);
     if (command_buffer[2] != '\0') {
@@ -738,7 +737,7 @@ static void ReadRegister() {
 /// Send all registers to the gdb client.
 static void ReadRegisters() {
     static u8 buffer[GDB_BUFFER_SIZE - 4];
-    memset(buffer, 0, sizeof(buffer));
+    std::memset(buffer, 0, sizeof(buffer));
 
     u8* bufptr = buffer;
 
@@ -1036,7 +1035,7 @@ static void RemoveBreakpoint() {
     SendReply("OK");
 }
 
-void HandlePacket() {
+void HandlePacket(Core::System& system) {
     if (!IsConnected()) {
         if (defer_start) {
             ToggleServer(true);
@@ -1077,7 +1076,7 @@ void HandlePacket() {
         Continue();
         return;
     case 'F':
-        HandleHioReply(command_buffer, command_length);
+        HandleHioReply(system, command_buffer, command_length);
         break;
     case 'g':
         ReadRegisters();

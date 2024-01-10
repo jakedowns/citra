@@ -10,6 +10,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "audio_core/input_details.h"
+#include "audio_core/sink_details.h"
 #include "common/common_types.h"
 #include "core/hle/service/cam/cam_params.h"
 
@@ -18,11 +20,17 @@ namespace Settings {
 enum class GraphicsAPI {
     Software = 0,
     OpenGL = 1,
+    Vulkan = 2,
 };
 
 enum class InitClock : u32 {
     SystemTime = 0,
     FixedTime = 1,
+};
+
+enum class InitTicks : u32 {
+    Random = 0,
+    Fixed = 1,
 };
 
 enum class LayoutOption : u32 {
@@ -33,6 +41,7 @@ enum class LayoutOption : u32 {
 #ifndef ANDROID
     SeparateWindows,
 #endif
+    HybridScreen,
     // Similiar to default, but better for mobile devices in portrait mode. Top screen in clamped to
     // the top of the frame, and the bottom screen is enlarged to match the top screen.
     MobilePortrait,
@@ -40,12 +49,6 @@ enum class LayoutOption : u32 {
     // Similiar to LargeScreen, but better for mobile devices in landscape mode. The screens are
     // clamped to the top of the frame, and the bottom screen is a bit bigger.
     MobileLandscape,
-};
-
-enum class MicInputType : u32 {
-    None = 0,
-    Real = 1,
-    Static = 2,
 };
 
 enum class StereoRenderOption : u32 {
@@ -70,6 +73,21 @@ enum class AudioEmulation : u32 {
     LLEMultithreaded = 2,
 };
 
+enum class TextureFilter : u32 {
+    None = 0,
+    Anime4K = 1,
+    Bicubic = 2,
+    ScaleForce = 3,
+    xBRZ = 4,
+    MMPX = 5,
+};
+
+enum class TextureSampling : u32 {
+    GameControlled = 0,
+    NearestNeighbor = 1,
+    Linear = 2,
+};
+
 namespace NativeButton {
 
 enum Values {
@@ -92,13 +110,14 @@ enum Values {
     ZR,
 
     Home,
+    Power,
 
     NumButtons,
 };
 
 constexpr int BUTTON_HID_BEGIN = A;
 constexpr int BUTTON_IR_BEGIN = ZL;
-constexpr int BUTTON_NS_BEGIN = Home;
+constexpr int BUTTON_NS_BEGIN = Power;
 
 constexpr int BUTTON_HID_END = BUTTON_IR_BEGIN;
 constexpr int BUTTON_IR_END = BUTTON_NS_BEGIN;
@@ -126,6 +145,7 @@ static const std::array<const char*, NumButtons> mapping = {{
     "button_zl",
     "button_zr",
     "button_home",
+    "button_power",
 }};
 
 } // namespace NativeButton
@@ -168,7 +188,8 @@ public:
      * @param default_val Intial value of the setting, and default value of the setting
      * @param name Label for the setting
      */
-    explicit Setting(const Type& default_val, const std::string& name) requires(!ranged)
+    explicit Setting(const Type& default_val, const std::string& name)
+        requires(!ranged)
         : value{default_val}, default_value{default_val}, label{name} {}
     virtual ~Setting() = default;
 
@@ -181,7 +202,8 @@ public:
      * @param name Label for the setting
      */
     explicit Setting(const Type& default_val, const Type& min_val, const Type& max_val,
-                     const std::string& name) requires(ranged)
+                     const std::string& name)
+        requires(ranged)
         : value{default_val},
           default_value{default_val}, maximum{max_val}, minimum{min_val}, label{name} {}
 
@@ -269,7 +291,8 @@ public:
      * @param default_val Intial value of the setting, and default value of the setting
      * @param name Label for the setting
      */
-    explicit SwitchableSetting(const Type& default_val, const std::string& name) requires(!ranged)
+    explicit SwitchableSetting(const Type& default_val, const std::string& name)
+        requires(!ranged)
         : Setting<Type>{default_val, name} {}
     virtual ~SwitchableSetting() = default;
 
@@ -282,7 +305,8 @@ public:
      * @param name Label for the setting
      */
     explicit SwitchableSetting(const Type& default_val, const Type& min_val, const Type& max_val,
-                               const std::string& name) requires(ranged)
+                               const std::string& name)
+        requires(ranged)
         : Setting<Type, true>{default_val, min_val, max_val, name} {}
 
     /**
@@ -402,6 +426,8 @@ struct Values {
     std::vector<InputProfile> input_profiles; ///< The list of input profiles
     std::vector<TouchFromButtonMap> touch_from_button_maps;
 
+    SwitchableSetting<bool> enable_gamemode{true, "enable_gamemode"};
+
     // Core
     Setting<bool> use_cpu_jit{true, "use_cpu_jit"};
     SwitchableSetting<s32, true> cpu_clock_percentage{100, 5, 400, "cpu_clock_percentage"};
@@ -416,22 +442,36 @@ struct Values {
     Setting<InitClock> init_clock{InitClock::SystemTime, "init_clock"};
     Setting<u64> init_time{946681277ULL, "init_time"};
     Setting<s64> init_time_offset{0, "init_time_offset"};
+    Setting<InitTicks> init_ticks_type{InitTicks::Random, "init_ticks_type"};
+    Setting<s64> init_ticks_override{0, "init_ticks_override"};
     Setting<bool> plugin_loader_enabled{false, "plugin_loader"};
     Setting<bool> allow_plugin_loader{true, "allow_plugin_loader"};
 
     // Renderer
-    SwitchableSetting<GraphicsAPI> graphics_api{GraphicsAPI::OpenGL, "graphics_api"};
+    SwitchableSetting<GraphicsAPI, true> graphics_api{
+#ifdef HAS_OPENGL
+        GraphicsAPI::OpenGL,
+#else
+        GraphicsAPI::Vulkan,
+#endif
+        GraphicsAPI::Software, GraphicsAPI::Vulkan, "graphics_api"};
+    SwitchableSetting<u32> physical_device{0, "physical_device"};
     Setting<bool> use_gles{false, "use_gles"};
     Setting<bool> renderer_debug{false, "renderer_debug"};
+    Setting<bool> dump_command_buffers{false, "dump_command_buffers"};
+    SwitchableSetting<bool> spirv_shader_gen{true, "spirv_shader_gen"};
+    SwitchableSetting<bool> async_shader_compilation{false, "async_shader_compilation"};
+    SwitchableSetting<bool> async_presentation{true, "async_presentation"};
     SwitchableSetting<bool> use_hw_shader{true, "use_hw_shader"};
-    SwitchableSetting<bool> separable_shader{false, "use_separable_shader"};
     SwitchableSetting<bool> use_disk_shader_cache{true, "use_disk_shader_cache"};
     SwitchableSetting<bool> shaders_accurate_mul{true, "shaders_accurate_mul"};
     SwitchableSetting<bool> use_vsync_new{true, "use_vsync_new"};
     Setting<bool> use_shader_jit{true, "use_shader_jit"};
     SwitchableSetting<u32, true> resolution_factor{1, 0, 10, "resolution_factor"};
     SwitchableSetting<u16, true> frame_limit{100, 0, 1000, "frame_limit"};
-    SwitchableSetting<std::string> texture_filter_name{"none", "texture_filter_name"};
+    SwitchableSetting<TextureFilter> texture_filter{TextureFilter::None, "texture_filter"};
+    SwitchableSetting<TextureSampling> texture_sampling{TextureSampling::GameControlled,
+                                                        "texture_sampling"};
 
     SwitchableSetting<LayoutOption> layout_option{LayoutOption::Default, "layout_option"};
     SwitchableSetting<bool> swap_screen{false, "swap_screen"};
@@ -449,9 +489,9 @@ struct Values {
     Setting<u16> custom_bottom_bottom{480, "custom_bottom_bottom"};
     Setting<u16> custom_second_layer_opacity{100, "custom_second_layer_opacity"};
 
-    SwitchableSetting<double> bg_red{0.f, "bg_red"};
-    SwitchableSetting<double> bg_green{0.f, "bg_green"};
-    SwitchableSetting<double> bg_blue{0.f, "bg_blue"};
+    SwitchableSetting<float> bg_red{0.f, "bg_red"};
+    SwitchableSetting<float> bg_green{0.f, "bg_green"};
+    SwitchableSetting<float> bg_blue{0.f, "bg_blue"};
 
     SwitchableSetting<StereoRenderOption> render_3d{StereoRenderOption::Off, "render_3d"};
     SwitchableSetting<u32> factor_3d{0, "factor_3d"};
@@ -469,16 +509,17 @@ struct Values {
     SwitchableSetting<bool> dump_textures{false, "dump_textures"};
     SwitchableSetting<bool> custom_textures{false, "custom_textures"};
     SwitchableSetting<bool> preload_textures{false, "preload_textures"};
+    SwitchableSetting<bool> async_custom_loading{true, "async_custom_loading"};
 
     // Audio
     bool audio_muted;
     SwitchableSetting<AudioEmulation> audio_emulation{AudioEmulation::HLE, "audio_emulation"};
-    Setting<std::string> sink_id{"auto", "output_engine"};
     SwitchableSetting<bool> enable_audio_stretching{true, "enable_audio_stretching"};
-    Setting<std::string> audio_device_id{"auto", "output_device"};
     SwitchableSetting<float, true> volume{1.f, 0.f, 1.f, "volume"};
-    Setting<MicInputType> mic_input_type{MicInputType::None, "mic_input_type"};
-    Setting<std::string> mic_input_device{"Default", "mic_input_device"};
+    Setting<AudioCore::SinkType> output_type{AudioCore::SinkType::Auto, "output_type"};
+    Setting<std::string> output_device{"auto", "output_device"};
+    Setting<AudioCore::InputType> input_type{AudioCore::InputType::Auto, "input_type"};
+    Setting<std::string> input_device{"auto", "input_device"};
 
     // Camera
     std::array<std::string, Service::CAM::NumCameras> camera_name;
@@ -514,7 +555,6 @@ void SetConfiguringGlobal(bool is_global);
 
 float Volume();
 
-void Apply();
 void LogSettings();
 
 // Restore the global state of all applicable settings in the Values struct

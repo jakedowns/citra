@@ -6,27 +6,29 @@
 
 #include "common/vector_math.h"
 #include "video_core/rasterizer_interface.h"
-#include "video_core/regs_texturing.h"
-#include "video_core/shader/shader_uniforms.h"
+#include "video_core/shader/generator/pica_fs_config.h"
+#include "video_core/shader/generator/shader_uniforms.h"
 
 namespace Memory {
 class MemorySystem;
 }
 
 namespace Pica {
-struct Regs;
+class PicaCore;
 }
 
 namespace VideoCore {
 
 class RasterizerAccelerated : public RasterizerInterface {
 public:
-    RasterizerAccelerated(Memory::MemorySystem& memory);
+    explicit RasterizerAccelerated(Memory::MemorySystem& memory, Pica::PicaCore& pica);
     virtual ~RasterizerAccelerated() = default;
 
-    void AddTriangle(const Pica::Shader::OutputVertex& v0, const Pica::Shader::OutputVertex& v1,
-                     const Pica::Shader::OutputVertex& v2) override;
+    void AddTriangle(const Pica::OutputVertex& v0, const Pica::OutputVertex& v1,
+                     const Pica::OutputVertex& v2) override;
+
     void NotifyPicaRegisterChanged(u32 id) override;
+
     void SyncEntireState() override;
 
 protected:
@@ -97,13 +99,22 @@ protected:
     /// Syncs the texture LOD bias to match the PICA register
     void SyncTextureLodBias(int tex_index);
 
-    /// Syncs the clip coefficients to match the PICA register
-    void SyncClipCoef();
+    /// Syncs the texture border color to match the PICA registers
+    void SyncTextureBorderColor(int tex_index);
+
+    /// Syncs the clip plane state to match the PICA register
+    void SyncClipPlane();
 
 protected:
-    /// Structure that keeps tracks of the uniform state
-    struct UniformBlockData {
-        Pica::Shader::UniformData data{};
+    /// Structure that keeps tracks of the vertex shader uniform state
+    struct VSUniformBlockData {
+        Pica::Shader::Generator::VSUniformData data{};
+        bool dirty = true;
+    };
+
+    /// Structure that keeps tracks of the fragment shader uniform state
+    struct FSUniformBlockData {
+        Pica::Shader::Generator::FSUniformData data{};
         std::array<bool, Pica::LightingRegs::NumLightingSampler> lighting_lut_dirty{};
         bool lighting_lut_dirty_any = true;
         bool fog_lut_dirty = true;
@@ -118,7 +129,7 @@ protected:
     /// Structure that the hardware rendered vertices are composed of
     struct HardwareVertex {
         HardwareVertex() = default;
-        HardwareVertex(const Pica::Shader::OutputVertex& v, bool flip_quaternion);
+        HardwareVertex(const Pica::OutputVertex& v, bool flip_quaternion);
 
         Common::Vec4f position;
         Common::Vec4f color;
@@ -141,14 +152,17 @@ protected:
 
 protected:
     Memory::MemorySystem& memory;
-    Pica::Regs& regs;
+    Pica::PicaCore& pica;
+    Pica::RegsInternal& regs;
 
     std::vector<HardwareVertex> vertex_batch;
+    Pica::Shader::UserConfig user_config{};
     bool shader_dirty = true;
 
-    UniformBlockData uniform_block_data{};
-    std::array<std::array<Common::Vec2f, 256>, Pica::LightingRegs::NumLightingSampler>
-        lighting_lut_data{};
+    VSUniformBlockData vs_uniform_block_data{};
+    FSUniformBlockData fs_uniform_block_data{};
+    using LightLUT = std::array<Common::Vec2f, 256>;
+    std::array<LightLUT, Pica::LightingRegs::NumLightingSampler> lighting_lut_data{};
     std::array<Common::Vec2f, 128> fog_lut_data{};
     std::array<Common::Vec2f, 128> proctex_noise_lut_data{};
     std::array<Common::Vec2f, 128> proctex_color_map_data{};
@@ -156,4 +170,5 @@ protected:
     std::array<Common::Vec4f, 256> proctex_lut_data{};
     std::array<Common::Vec4f, 256> proctex_diff_lut_data{};
 };
+
 } // namespace VideoCore

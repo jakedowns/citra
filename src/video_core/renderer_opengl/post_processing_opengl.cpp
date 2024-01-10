@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -40,9 +41,9 @@ constexpr char dolphin_shader_header[] = R"(
 #define lerp mix
 
 // Output variable
-out float4 color;
+layout (location = 0) out float4 color;
 // Input coordinates
-in float2 frag_tex_coord;
+layout (location = 0) in float2 frag_tex_coord;
 // Resolution
 uniform float4 i_resolution;
 uniform float4 o_resolution;

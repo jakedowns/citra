@@ -4,13 +4,12 @@
 
 #pragma once
 
-#include <new>
-#include <utility>
 #include <boost/serialization/access.hpp>
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "common/common_funcs.h"
 #include "common/common_types.h"
+#include "common/expected.h"
 
 // All the constants in this file come from http://3dbrew.org/wiki/Error_codes
 
@@ -193,7 +192,7 @@ enum class ErrorLevel : u32 {
 };
 
 /// Encapsulates a CTR-OS error code, allowing it to be separated into its constituent fields.
-union ResultCode {
+union Result {
     u32 raw;
 
     BitField<0, 10, u32> description;
@@ -206,18 +205,18 @@ union ResultCode {
     // error
     BitField<31, 1, u32> is_error;
 
-    constexpr explicit ResultCode(u32 raw) : raw(raw) {}
+    constexpr explicit Result(u32 raw) : raw(raw) {}
 
-    constexpr ResultCode(ErrorDescription description, ErrorModule module, ErrorSummary summary,
-                         ErrorLevel level)
-        : ResultCode(static_cast<u32>(description), module, summary, level) {}
+    constexpr Result(ErrorDescription description, ErrorModule module, ErrorSummary summary,
+                     ErrorLevel level)
+        : Result(static_cast<u32>(description), module, summary, level) {}
 
-    constexpr ResultCode(u32 description_, ErrorModule module_, ErrorSummary summary_,
-                         ErrorLevel level_)
+    constexpr Result(u32 description_, ErrorModule module_, ErrorSummary summary_,
+                     ErrorLevel level_)
         : raw(description.FormatValue(description_) | module.FormatValue(module_) |
               summary.FormatValue(summary_) | level.FormatValue(level_)) {}
 
-    constexpr ResultCode& operator=(const ResultCode& o) = default;
+    constexpr Result& operator=(const Result& o) = default;
 
     constexpr bool IsSuccess() const {
         return is_error.ExtractValue(raw) == 0;
@@ -235,201 +234,159 @@ private:
     friend class boost::serialization::access;
 };
 
-constexpr bool operator==(const ResultCode& a, const ResultCode& b) {
+constexpr bool operator==(const Result& a, const Result& b) {
     return a.raw == b.raw;
 }
 
-constexpr bool operator!=(const ResultCode& a, const ResultCode& b) {
+constexpr bool operator!=(const Result& a, const Result& b) {
     return a.raw != b.raw;
 }
 
 // Convenience functions for creating some common kinds of errors:
 
-/// The default success `ResultCode`.
-constexpr ResultCode RESULT_SUCCESS(0);
+/// The default success `Result`.
+constexpr Result ResultSuccess(0);
 
 /// Might be returned instead of a dummy success for unimplemented APIs.
-constexpr ResultCode UnimplementedFunction(ErrorModule module) {
-    return ResultCode(ErrorDescription::NotImplemented, module, ErrorSummary::NotSupported,
-                      ErrorLevel::Permanent);
+constexpr Result UnimplementedFunction(ErrorModule module) {
+    return Result(ErrorDescription::NotImplemented, module, ErrorSummary::NotSupported,
+                  ErrorLevel::Permanent);
 }
 
 /**
- * This is an optional value type. It holds a `ResultCode` and, if that code is a success code,
- * also holds a result of type `T`. If the code is an error code then trying to access the inner
- * value fails, thus ensuring that the ResultCode of functions is always checked properly before
- * their return value is used.  It is similar in concept to the `std::optional` type
- * (http://en.cppreference.com/w/cpp/experimental/optional) originally proposed for inclusion in
- * C++14, or the `Result` type in Rust (http://doc.rust-lang.org/std/result/index.html).
+ * Placeholder result code used for unknown error codes.
+ *
+ * @note This should only be used when a particular error code
+ *       is not known yet.
+ */
+constexpr Result ResultUnknown(std::numeric_limits<u32>::max());
+
+/**
+ * This is an optional value type. It holds a `Result` and, if that code is ResultSuccess, it
+ * also holds a result of type `T`. If the code is an error code (not ResultSuccess), then trying
+ * to access the inner value with operator* is undefined behavior and will assert with Unwrap().
+ * Users of this class must be cognizant to check the status of the ResultVal with operator bool(),
+ * Code(), Succeeded() or Failed() prior to accessing the inner value.
  *
  * An example of how it could be used:
  * \code
  * ResultVal<int> Frobnicate(float strength) {
  *     if (strength < 0.f || strength > 1.0f) {
  *         // Can't frobnicate too weakly or too strongly
- *         return ResultCode(ErrorDescription::OutOfRange, ErrorModule::Common,
+ *         return Result(ErrorDescription::OutOfRange, ErrorModule::Common,
  *             ErrorSummary::InvalidArgument, ErrorLevel::Permanent);
  *     } else {
  *         // Frobnicated! Give caller a cookie
- *         return MakeResult<int>(42);
+ *         return 42;
  *     }
  * }
  * \endcode
  *
  * \code
- * ResultVal<int> frob_result = Frobnicate(0.75f);
+ * auto frob_result = Frobnicate(0.75f);
  * if (frob_result) {
  *     // Frobbed ok
  *     printf("My cookie is %d\n", *frob_result);
  * } else {
- *     printf("Guess I overdid it. :( Error code: %ux\n", frob_result.code().hex);
+ *     printf("Guess I overdid it. :( Error code: %ux\n", frob_result.Code().raw);
  * }
  * \endcode
  */
 template <typename T>
 class ResultVal {
 public:
-    /// Constructs an empty `ResultVal` with the given error code. The code must not be a success
-    /// code.
-    ResultVal(ResultCode error_code = ResultCode(-1)) : result_code(error_code) {
-        ASSERT(error_code.IsError());
-    }
+    constexpr ResultVal() : expected{} {}
 
-    /**
-     * Similar to the non-member function `MakeResult`, with the exception that you can manually
-     * specify the success code. `success_code` must not be an error code.
-     */
-    template <typename... Args>
-    static ResultVal WithCode(ResultCode success_code, Args&&... args) {
-        ResultVal<T> result;
-        result.emplace(success_code, std::forward<Args>(args)...);
-        return result;
-    }
+    constexpr ResultVal(Result code) : expected{Common::Unexpected(code)} {}
 
-    ResultVal(const ResultVal& o) : result_code(o.result_code) {
-        if (!o.empty()) {
-            new (&object) T(o.object);
-        }
-    }
-
-    ResultVal(ResultVal&& o) : result_code(o.result_code) {
-        if (!o.empty()) {
-            new (&object) T(std::move(o.object));
-        }
-    }
-
-    ~ResultVal() {
-        if (!empty()) {
-            object.~T();
-        }
-    }
-
-    ResultVal& operator=(const ResultVal& o) {
-        if (!empty()) {
-            if (!o.empty()) {
-                object = o.object;
-            } else {
-                object.~T();
-            }
-        } else {
-            if (!o.empty()) {
-                new (&object) T(o.object);
-            }
-        }
-        result_code = o.result_code;
-
-        return *this;
-    }
-
-    /**
-     * Replaces the current result with a new constructed result value in-place. The code must not
-     * be an error code.
-     */
-    template <typename... Args>
-    void emplace(ResultCode success_code, Args&&... args) {
-        ASSERT(success_code.IsSuccess());
-        if (!empty()) {
-            object.~T();
-        }
-        new (&object) T(std::forward<Args>(args)...);
-        result_code = success_code;
-    }
-
-    /// Returns true if the `ResultVal` contains an error code and no value.
-    bool empty() const {
-        return result_code.IsError();
-    }
-
-    /// Returns true if the `ResultVal` contains a return value.
-    bool Succeeded() const {
-        return result_code.IsSuccess();
-    }
-    /// Returns true if the `ResultVal` contains an error code and no value.
-    bool Failed() const {
-        return empty();
-    }
-
-    ResultCode Code() const {
-        return result_code;
-    }
-
-    const T& operator*() const {
-        return object;
-    }
-    T& operator*() {
-        return object;
-    }
-    const T* operator->() const {
-        return &object;
-    }
-    T* operator->() {
-        return &object;
-    }
-
-    /// Returns the value contained in this `ResultVal`, or the supplied default if it is missing.
     template <typename U>
-    T ValueOr(U&& value) const {
-        return !empty() ? object : std::move(value);
+    constexpr ResultVal(U&& val) : expected{std::forward<U>(val)} {}
+
+    template <typename... Args>
+    constexpr ResultVal(Args&&... args) : expected{std::in_place, std::forward<Args>(args)...} {}
+
+    ~ResultVal() = default;
+
+    constexpr ResultVal(const ResultVal&) = default;
+    constexpr ResultVal(ResultVal&&) = default;
+
+    ResultVal& operator=(const ResultVal&) = default;
+    ResultVal& operator=(ResultVal&&) = default;
+
+    [[nodiscard]] constexpr explicit operator bool() const noexcept {
+        return expected.has_value();
     }
 
-    /// Asserts that the result succeeded and returns a reference to it.
-    T& Unwrap() & {
-        ASSERT_MSG(Succeeded(), "Tried to Unwrap empty ResultVal");
-        return **this;
+    [[nodiscard]] constexpr Result Code() const {
+        return expected.has_value() ? ResultSuccess : expected.error();
     }
 
-    T&& Unwrap() && {
+    [[nodiscard]] constexpr bool Succeeded() const {
+        return expected.has_value();
+    }
+
+    [[nodiscard]] constexpr bool Failed() const {
+        return !expected.has_value();
+    }
+
+    [[nodiscard]] constexpr T* operator->() {
+        return std::addressof(expected.value());
+    }
+
+    [[nodiscard]] constexpr const T* operator->() const {
+        return std::addressof(expected.value());
+    }
+
+    [[nodiscard]] constexpr T& operator*() & {
+        return *expected;
+    }
+
+    [[nodiscard]] constexpr const T& operator*() const& {
+        return *expected;
+    }
+
+    [[nodiscard]] constexpr T&& operator*() && {
+        return *expected;
+    }
+
+    [[nodiscard]] constexpr const T&& operator*() const&& {
+        return *expected;
+    }
+
+    [[nodiscard]] constexpr T& Unwrap() & {
         ASSERT_MSG(Succeeded(), "Tried to Unwrap empty ResultVal");
-        return std::move(**this);
+        return expected.value();
+    }
+
+    [[nodiscard]] constexpr const T& Unwrap() const& {
+        ASSERT_MSG(Succeeded(), "Tried to Unwrap empty ResultVal");
+        return expected.value();
+    }
+
+    [[nodiscard]] constexpr T&& Unwrap() && {
+        ASSERT_MSG(Succeeded(), "Tried to Unwrap empty ResultVal");
+        return std::move(expected.value());
+    }
+
+    [[nodiscard]] constexpr const T&& Unwrap() const&& {
+        ASSERT_MSG(Succeeded(), "Tried to Unwrap empty ResultVal");
+        return std::move(expected.value());
+    }
+
+    template <typename U>
+    [[nodiscard]] constexpr T ValueOr(U&& v) const& {
+        return expected.value_or(v);
+    }
+
+    template <typename U>
+    [[nodiscard]] constexpr T ValueOr(U&& v) && {
+        return expected.value_or(v);
     }
 
 private:
-    // A union is used to allocate the storage for the value, while allowing us to construct and
-    // destruct it at will.
-    union {
-        T object;
-    };
-    ResultCode result_code;
+    // TODO: Replace this with std::expected once it is standardized in the STL.
+    Common::Expected<T, Result> expected;
 };
-
-/**
- * This function is a helper used to construct `ResultVal`s. It receives the arguments to construct
- * `T` with and creates a success `ResultVal` contained the constructed value.
- */
-template <typename T, typename... Args>
-ResultVal<T> MakeResult(Args&&... args) {
-    return ResultVal<T>::WithCode(RESULT_SUCCESS, std::forward<Args>(args)...);
-}
-
-/**
- * Deducible overload of MakeResult, allowing the template parameter to be ommited if you're just
- * copy or move constructing.
- */
-template <typename Arg>
-ResultVal<std::remove_reference_t<Arg>> MakeResult(Arg&& arg) {
-    return ResultVal<std::remove_reference_t<Arg>>::WithCode(RESULT_SUCCESS,
-                                                             std::forward<Arg>(arg));
-}
 
 /**
  * Check for the success of `source` (which must evaluate to a ResultVal). If it succeeds, unwraps
@@ -443,11 +400,28 @@ ResultVal<std::remove_reference_t<Arg>> MakeResult(Arg&& arg) {
         return CONCAT2(check_result_L, __LINE__).Code();                                           \
     target = std::move(*CONCAT2(check_result_L, __LINE__))
 
-/**
- * Analogous to CASCADE_RESULT, but for a bare ResultCode. The code will be propagated if
- * non-success, or discarded otherwise.
- */
-#define CASCADE_CODE(source)                                                                       \
-    auto CONCAT2(check_result_L, __LINE__) = source;                                               \
-    if (CONCAT2(check_result_L, __LINE__).IsError())                                               \
-        return CONCAT2(check_result_L, __LINE__);
+#define R_SUCCEEDED(res) (static_cast<Result>(res).IsSuccess())
+#define R_FAILED(res) (static_cast<Result>(res).IsError())
+
+/// Evaluates a boolean expression, and returns a result unless that expression is true.
+#define R_UNLESS(expr, res)                                                                        \
+    {                                                                                              \
+        if (!(expr)) {                                                                             \
+            return (res);                                                                          \
+        }                                                                                          \
+    }
+
+/// Evaluates an expression that returns a result, and returns the result if it would fail.
+#define R_TRY(res_expr)                                                                            \
+    {                                                                                              \
+        const auto _tmp_r_try_rc = (res_expr);                                                     \
+        if (R_FAILED(_tmp_r_try_rc)) {                                                             \
+            return (_tmp_r_try_rc);                                                                \
+        }                                                                                          \
+    }
+
+/// Evaluates a boolean expression, and succeeds if that expression is true.
+#define R_SUCCEED_IF(expr) R_UNLESS(!(expr), ResultSuccess)
+
+/// Evaluates a boolean expression, and asserts if that expression is false.
+#define R_ASSERT(expr) ASSERT(R_SUCCEEDED(expr))

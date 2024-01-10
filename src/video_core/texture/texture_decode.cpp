@@ -5,10 +5,9 @@
 #include "common/assert.h"
 #include "common/color.h"
 #include "common/logging/log.h"
-#include "common/math_util.h"
 #include "common/swap.h"
 #include "common/vector_math.h"
-#include "video_core/regs_texturing.h"
+#include "video_core/pica/regs_texturing.h"
 #include "video_core/texture/etc1.h"
 #include "video_core/texture/texture_decode.h"
 #include "video_core/utils.h"
@@ -191,7 +190,7 @@ Common::Vec4<u8> LookupTexelInTile(const u8* source, unsigned int x, unsigned in
         u8 alpha = 255;
         if (has_alpha) {
             u64_le packed_alpha;
-            memcpy(&packed_alpha, subtile_ptr, sizeof(u64));
+            std::memcpy(&packed_alpha, subtile_ptr, sizeof(u64));
             subtile_ptr += sizeof(u64);
 
             alpha =
@@ -199,7 +198,7 @@ Common::Vec4<u8> LookupTexelInTile(const u8* source, unsigned int x, unsigned in
         }
 
         u64_le subtile_data;
-        memcpy(&subtile_data, subtile_ptr, sizeof(u64));
+        std::memcpy(&subtile_data, subtile_ptr, sizeof(u64));
 
         return Common::MakeVec(SampleETC1Subtile(subtile_data, x, y),
                                disable_alpha ? (u8)255 : alpha);

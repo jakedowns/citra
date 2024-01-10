@@ -13,15 +13,14 @@
 #include "core/hle/service/ptm/ptm.h"
 #include "core/movie.h"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 SERIALIZE_EXPORT_IMPL(SharedPage::Handler)
 
 namespace boost::serialization {
 
 template <class Archive>
 void load_construct_data(Archive& ar, SharedPage::Handler* t, const unsigned int) {
-    ::new (t) SharedPage::Handler(Core::System::GetInstance().CoreTiming());
+    ::new (t) SharedPage::Handler(Core::System::GetInstance().CoreTiming(),
+                                  Core::System::GetInstance().Movie().GetOverrideInitTime());
 }
 template void load_construct_data<iarchive>(iarchive& ar, SharedPage::Handler* t,
                                             const unsigned int);
@@ -30,8 +29,7 @@ template void load_construct_data<iarchive>(iarchive& ar, SharedPage::Handler* t
 
 namespace SharedPage {
 
-static std::chrono::seconds GetInitTime() {
-    const u64 override_init_time = Core::Movie::GetInstance().GetOverrideInitTime();
+static std::chrono::seconds GetInitTime(u64 override_init_time) {
     if (override_init_time != 0) {
         // Override the clock init time with the one in the movie
         return std::chrono::seconds(override_init_time);
@@ -64,7 +62,7 @@ static std::chrono::seconds GetInitTime() {
     }
 }
 
-Handler::Handler(Core::Timing& timing) : timing(timing) {
+Handler::Handler(Core::Timing& timing, u64 override_init_time) : timing(timing) {
     std::memset(&shared_page, 0, sizeof(shared_page));
 
     shared_page.running_hw = 0x1; // product
@@ -78,7 +76,7 @@ Handler::Handler(Core::Timing& timing) : timing(timing) {
     shared_page.battery_state.is_adapter_connected.Assign(1);
     shared_page.battery_state.is_charging.Assign(1);
 
-    init_time = GetInitTime();
+    init_time = GetInitTime(override_init_time);
 
     using namespace std::placeholders;
     update_time_event = timing.RegisterEvent("SharedPage::UpdateTimeCallback",
@@ -89,8 +87,7 @@ Handler::Handler(Core::Timing& timing) : timing(timing) {
     shared_page.sliderstate_3d = static_cast<float_le>(slidestate);
 }
 
-/// Gets system time in 3DS format. The epoch is Jan 1900, and the unit is millisecond.
-u64 Handler::GetSystemTime() const {
+u64 Handler::GetSystemTimeSince2000() const {
     std::chrono::milliseconds now =
         init_time + std::chrono::duration_cast<std::chrono::milliseconds>(timing.GetGlobalTimeUs());
 
@@ -106,23 +103,25 @@ u64 Handler::GetSystemTime() const {
     epoch_tm.tm_isdst = 0;
     s64 epoch = std::mktime(&epoch_tm) * 1000;
 
-    // 3DS console time uses Jan 1 1900 as internal epoch,
-    // so we use the milliseconds between 1900 and 2000 as base console time
-    u64 console_time = 3155673600000ULL;
-
     // Only when system time is after 2000, we set it as 3DS system time
     if (now.count() > epoch) {
-        console_time += (now.count() - epoch);
+        return now.count() - epoch;
+    } else {
+        return 0;
     }
+}
 
-    return console_time;
+u64 Handler::GetSystemTimeSince1900() const {
+    // 3DS console time uses Jan 1 1900 as internal epoch,
+    // so we use the milliseconds between 1900 and 2000 as base console time
+    return 3155673600000ULL + GetSystemTimeSince2000();
 }
 
 void Handler::UpdateTimeCallback(std::uintptr_t user_data, int cycles_late) {
     DateTime& date_time =
         shared_page.date_time_counter % 2 ? shared_page.date_time_0 : shared_page.date_time_1;
 
-    date_time.date_time = GetSystemTime();
+    date_time.date_time = GetSystemTimeSince1900();
     date_time.update_tick = timing.GetTicks();
     date_time.tick_to_second_coefficient = BASE_CLOCK_RATE_ARM11;
     date_time.tick_offset = 0;

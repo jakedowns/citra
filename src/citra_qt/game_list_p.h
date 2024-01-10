@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <map>
+#include <span>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QImage>
@@ -22,6 +24,10 @@
 #include "common/logging/log.h"
 #include "common/string_util.h"
 #include "core/loader/smdh.h"
+
+namespace Service::FS {
+enum class MediaType : u32;
+}
 
 enum class GameListItemType {
     Game = QStandardItem::UserType + 1,
@@ -151,14 +157,16 @@ public:
     static constexpr int ProgramIdRole = SortRole + 3;
     static constexpr int ExtdataIdRole = SortRole + 4;
     static constexpr int LongTitleRole = SortRole + 5;
+    static constexpr int MediaTypeRole = SortRole + 6;
 
     GameListItemPath() = default;
-    GameListItemPath(const QString& game_path, const std::vector<u8>& smdh_data, u64 program_id,
-                     u64 extdata_id) {
+    GameListItemPath(const QString& game_path, std::span<const u8> smdh_data, u64 program_id,
+                     u64 extdata_id, Service::FS::MediaType media_type) {
         setData(type(), TypeRole);
         setData(game_path, FullPathRole);
         setData(qulonglong(program_id), ProgramIdRole);
         setData(qulonglong(extdata_id), ExtdataIdRole);
+        setData(quint32(media_type), MediaTypeRole);
 
         if (UISettings::values.game_list_icon_size.GetValue() ==
             UISettings::GameListIconSize::NoIcon) {
@@ -178,7 +186,7 @@ public:
         }
 
         Loader::SMDH smdh;
-        memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
+        std::memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
 
         // Get icon from SMDH
         if (UISettings::values.game_list_icon_size.GetValue() !=
@@ -286,7 +294,7 @@ public:
 class GameListItemRegion : public GameListItem {
 public:
     GameListItemRegion() = default;
-    explicit GameListItemRegion(const std::vector<u8>& smdh_data) {
+    explicit GameListItemRegion(std::span<const u8> smdh_data) {
         setData(type(), TypeRole);
 
         if (!Loader::IsValidSMDH(smdh_data)) {
@@ -295,7 +303,7 @@ public:
         }
 
         Loader::SMDH smdh;
-        memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
+        std::memcpy(&smdh, smdh_data.data(), sizeof(Loader::SMDH));
 
         setText(GetRegionFromSMDH(smdh));
         setData(GetRegionFromSMDH(smdh), SortRole);

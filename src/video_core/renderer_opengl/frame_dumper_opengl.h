@@ -6,8 +6,8 @@
 
 #include <atomic>
 #include <memory>
-#include <thread>
-#include "core/dumping/backend.h"
+
+#include "common/polyfill_thread.h"
 #include "core/frontend/framebuffer_layout.h"
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 
@@ -16,6 +16,10 @@ class EmuWindow;
 class GraphicsContext;
 class TextureMailbox;
 } // namespace Frontend
+
+namespace Core {
+class System;
+}
 
 namespace OpenGL {
 
@@ -28,7 +32,7 @@ class RendererOpenGL;
  */
 class FrameDumperOpenGL {
 public:
-    explicit FrameDumperOpenGL(VideoDumper::Backend& video_dumper, Frontend::EmuWindow& emu_window);
+    explicit FrameDumperOpenGL(Core::System& system, Frontend::EmuWindow& emu_window);
     ~FrameDumperOpenGL();
 
     bool IsDumping() const;
@@ -41,12 +45,12 @@ public:
 private:
     void InitializeOpenGLObjects();
     void CleanupOpenGLObjects();
-    void PresentLoop();
+    void PresentLoop(std::stop_token stop_token);
 
-    VideoDumper::Backend& video_dumper;
+private:
+    Core::System& system;
     std::unique_ptr<Frontend::GraphicsContext> context;
-    std::thread present_thread;
-    std::atomic_bool stop_requested{false};
+    std::jthread present_thread;
 
     // PBOs used to dump frames faster
     std::array<OGLBuffer, 2> pbos;

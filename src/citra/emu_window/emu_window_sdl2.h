@@ -4,15 +4,20 @@
 
 #pragma once
 
-#include <memory>
 #include <utility>
+#include "common/common_types.h"
 #include "core/frontend/emu_window.h"
 
+union SDL_Event;
 struct SDL_Window;
+
+namespace Core {
+class System;
+}
 
 class EmuWindow_SDL2 : public Frontend::EmuWindow {
 public:
-    explicit EmuWindow_SDL2(bool is_secondary);
+    explicit EmuWindow_SDL2(Core::System& system_, bool is_secondary);
     ~EmuWindow_SDL2();
 
     /// Initializes SDL2
@@ -31,6 +36,9 @@ public:
     void RequestClose();
 
 protected:
+    /// Gets the ID of the window an event originated from.
+    u32 GetEventWindowId(const SDL_Event& event) const;
+
     /// Called by PollEvents when a key is pressed or released.
     void OnKeyEvent(int key, u8 state);
 
@@ -71,11 +79,13 @@ protected:
     SDL_Window* render_window;
 
     /// Internal SDL2 window ID
-    int render_window_id{};
+    u32 render_window_id{};
 
     /// Fake hidden window for the core context
     SDL_Window* dummy_window;
 
     /// Keeps track of how often to update the title bar during gameplay
     u32 last_time = 0;
+
+    Core::System& system;
 };

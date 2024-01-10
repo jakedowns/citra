@@ -6,7 +6,6 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <regex>
 #include <string>
 #include <thread>
 #include <cryptopp/base64.h>
@@ -151,15 +150,8 @@ static void SaveBanList(const Network::Room::BanList& ban_list, const std::strin
 }
 
 static void InitializeLogging(const std::string& log_file) {
-    Log::AddBackend(std::make_unique<Log::ColorConsoleBackend>());
-
-    const std::string& log_dir = FileUtil::GetUserPath(FileUtil::UserPath::LogDir);
-    FileUtil::CreateFullPath(log_dir);
-    Log::AddBackend(std::make_unique<Log::FileBackend>(log_dir + log_file));
-
-#ifdef _WIN32
-    Log::AddBackend(std::make_unique<Log::DebuggerBackend>());
-#endif
+    Common::Log::Initialize(log_file);
+    Common::Log::SetColorConsoleBackendEnabled(true);
 }
 
 /// Application entry point
@@ -178,7 +170,7 @@ int main(int argc, char** argv) {
     std::string ban_list_file;
     std::string log_file = "citra-room.log";
     u64 preferred_game_id = 0;
-    u32 port = Network::DefaultRoomPort;
+    u16 port = Network::DefaultRoomPort;
     u32 max_members = 16;
     bool enable_citra_mods = false;
 
@@ -212,7 +204,7 @@ int main(int argc, char** argv) {
                 room_description.assign(optarg);
                 break;
             case 'p':
-                port = strtoul(optarg, &endarg, 0);
+                port = static_cast<u16>(strtoul(optarg, &endarg, 0));
                 break;
             case 'm':
                 max_members = strtoul(optarg, &endarg, 0);

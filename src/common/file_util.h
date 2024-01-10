@@ -6,8 +6,8 @@
 
 #include <array>
 #include <cstdio>
-#include <fstream>
 #include <functional>
+#include <ios>
 #include <limits>
 #include <optional>
 #include <string>
@@ -191,7 +191,7 @@ void SetCurrentRomPath(const std::string& path);
 [[nodiscard]] const std::string& GetDefaultUserPath(UserPath path);
 
 // Update the Global Path with the new value
-const void UpdateUserPath(UserPath path, const std::string& filename);
+void UpdateUserPath(UserPath path, const std::string& filename);
 
 // Returns the path to where the sys file are
 [[nodiscard]] std::string GetSysDirectory();
@@ -295,6 +295,18 @@ public:
     }
 
     template <typename T>
+    std::size_t ReadAtArray(T* data, std::size_t length, std::size_t offset) {
+        static_assert(std::is_trivially_copyable_v<T>,
+                      "Given array does not consist of trivially copyable objects");
+
+        std::size_t items_read = ReadAtImpl(data, length, sizeof(T), offset);
+        if (items_read != length)
+            m_good = false;
+
+        return items_read;
+    }
+
+    template <typename T>
     std::size_t WriteArray(const T* data, std::size_t length) {
         static_assert(std::is_trivially_copyable_v<T>,
                       "Given array does not consist of trivially copyable objects");
@@ -310,6 +322,12 @@ public:
     std::size_t ReadBytes(T* data, std::size_t length) {
         static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
         return ReadArray(reinterpret_cast<char*>(data), length);
+    }
+
+    template <typename T>
+    std::size_t ReadAtBytes(T* data, std::size_t length, std::size_t offset) {
+        static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
+        return ReadAtArray(reinterpret_cast<char*>(data), length, offset);
     }
 
     template <typename T>
@@ -363,6 +381,8 @@ public:
 
 private:
     std::size_t ReadImpl(void* data, std::size_t length, std::size_t data_size);
+    std::size_t ReadAtImpl(void* data, std::size_t length, std::size_t data_size,
+                           std::size_t offset);
     std::size_t WriteImpl(const void* data, std::size_t length, std::size_t data_size);
 
     bool Open();

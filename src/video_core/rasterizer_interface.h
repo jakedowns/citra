@@ -7,20 +7,21 @@
 #include <atomic>
 #include <functional>
 #include "common/common_types.h"
-#include "core/hw/gpu.h"
 
-namespace OpenGL {
-struct ScreenInfo;
+namespace Pica {
+struct OutputVertex;
 }
 
-namespace Pica::Shader {
-struct OutputVertex;
-} // namespace Pica::Shader
+namespace Pica {
+struct DisplayTransferConfig;
+struct MemoryFillConfig;
+} // namespace Pica
 
 namespace VideoCore {
 
 enum class LoadCallbackStage {
     Prepare,
+    Preload,
     Decompile,
     Build,
     Complete,
@@ -29,12 +30,11 @@ using DiskResourceLoadCallback = std::function<void(LoadCallbackStage, std::size
 
 class RasterizerInterface {
 public:
-    virtual ~RasterizerInterface() {}
+    virtual ~RasterizerInterface() = default;
 
     /// Queues the primitive formed by the given vertices for rendering
-    virtual void AddTriangle(const Pica::Shader::OutputVertex& v0,
-                             const Pica::Shader::OutputVertex& v1,
-                             const Pica::Shader::OutputVertex& v2) = 0;
+    virtual void AddTriangle(const Pica::OutputVertex& v0, const Pica::OutputVertex& v1,
+                             const Pica::OutputVertex& v2) = 0;
 
     /// Draw the current batch of triangles
     virtual void DrawTriangles() = 0;
@@ -59,34 +59,27 @@ public:
     virtual void ClearAll(bool flush) = 0;
 
     /// Attempt to use a faster method to perform a display transfer with is_texture_copy = 0
-    virtual bool AccelerateDisplayTransfer(const GPU::Regs::DisplayTransferConfig& config) {
+    virtual bool AccelerateDisplayTransfer(const Pica::DisplayTransferConfig&) {
         return false;
     }
 
     /// Attempt to use a faster method to perform a display transfer with is_texture_copy = 1
-    virtual bool AccelerateTextureCopy(const GPU::Regs::DisplayTransferConfig& config) {
+    virtual bool AccelerateTextureCopy(const Pica::DisplayTransferConfig&) {
         return false;
     }
 
     /// Attempt to use a faster method to fill a region
-    virtual bool AccelerateFill(const GPU::Regs::MemoryFillConfig& config) {
-        return false;
-    }
-
-    /// Attempt to use a faster method to display the framebuffer to screen
-    virtual bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config,
-                                   PAddr framebuffer_addr, u32 pixel_stride,
-                                   OpenGL::ScreenInfo& screen_info) {
+    virtual bool AccelerateFill(const Pica::MemoryFillConfig&) {
         return false;
     }
 
     /// Attempt to draw using hardware shaders
-    virtual bool AccelerateDrawBatch(bool is_indexed) {
+    virtual bool AccelerateDrawBatch([[maybe_unused]] bool is_indexed) {
         return false;
     }
 
-    virtual void LoadDiskResources(const std::atomic_bool& stop_loading,
-                                   const DiskResourceLoadCallback& callback) {}
+    virtual void LoadDiskResources([[maybe_unused]] const std::atomic_bool& stop_loading,
+                                   [[maybe_unused]] const DiskResourceLoadCallback& callback) {}
 
     virtual void SyncEntireState() {}
 };
