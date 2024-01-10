@@ -3,6 +3,8 @@ include_directories(.)
 
 set(CMAKE_LINKER "E:/Program Files/Unity/Hub/Editor/2021.3.16f1/Editor/Data/PlaybackEngines/AndroidPlayer/NDK/toolchains/x86-4.9/prebuilt/windows-x86_64/i686-linux-android/bin/ld.gold.exe")
 
+
+
 # CMake seems to only define _DEBUG on Windows
 set_property(DIRECTORY APPEND PROPERTY
     COMPILE_DEFINITIONS $<$<CONFIG:Debug>:_DEBUG> $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
@@ -191,6 +193,7 @@ endif()
 if (ANDROID)
     add_subdirectory(android/app/src/main/jni)
     target_include_directories(citra-android PRIVATE android/app/src/main)
+    target_link_options(citra-android PRIVATE "-fuse-ld=lld")
 endif()
 
 if (ENABLE_WEB_SERVICE)
