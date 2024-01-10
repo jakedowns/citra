@@ -2,7 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+import java.util.Properties
 import android.databinding.tool.ext.capitalizeUS
+import com.android.build.api.dsl.Packaging
+import com.android.build.gradle.internal.dsl.PackagingOptions
 import de.undercouch.gradle.tasks.download.Download
 
 plugins {
@@ -24,6 +27,67 @@ val abiFilter = listOf("arm64-v8a", "x86_64")
 
 val downloadedJniLibsPath = "${buildDir}/downloadedJniLibs"
 
+// Leia
+val shouldAddDebugInfo: () -> Boolean = { true }
+val useInAppFaceTracking: () -> Boolean = { false }
+
+val localPropertiesFile = File(rootProject.projectDir, "local.properties")
+val properties = Properties()
+check(localPropertiesFile.exists())
+localPropertiesFile.reader(charset = Charsets.UTF_8).use { reader ->
+    properties.load(reader)
+}
+extra.set("cnsdkPath", properties.getProperty("cnsdk.dir").also {
+    check(it != null) { "cnsdk.dir not set in local.properties" }
+    if (!File(it).isAbsolute) {
+        File(rootProject.projectDir, it).absolutePath
+    } else {
+        File(it).absolutePath
+    }
+}.apply {
+    println("CNSDK directory: $this")
+})
+val cnsdkPath: String by extra(properties.getProperty("cnsdk.dir").also {
+    check(it != null) { "cnsdk.dir not set in local.properties" }
+    if (!File(it).isAbsolute) {
+        File(rootProject.projectDir, it).absolutePath
+    } else {
+        File(it).absolutePath
+    }
+})
+println("CNSDK directory: $cnsdkPath")
+val getCNSDKVersionName: () -> String = {
+    file(File(cnsdkPath, "VERSION.txt")).readText()
+}
+fun getCNSDKLibName(forceInApp: Boolean): String {
+    return if (useInAppFaceTracking() || forceInApp) {
+        "sdk-faceTrackingInApp-${getCNSDKVersionName()}.aar"
+    } else {
+        "sdk-faceTrackingService-${getCNSDKVersionName()}.aar"
+    }
+}
+tasks.register("copyNativeLibs") {
+    doLast {
+        copy {
+            from(zipTree("${cnsdkPath}/android/${getCNSDKLibName(false)}"))
+            include("jni/*/*.so")
+            into("${cnsdkPath}/lib")
+        }
+    }
+}
+fun DependencyHandler.addDependency(depFile: String) {
+    check(file(depFile).exists())
+    add("implementation", files(depFile))
+}
+fun DependencyHandler.addSdkDependency(forceInApp: Boolean) {
+    addDependency("${cnsdkPath}/android/${getCNSDKLibName(forceInApp)}")
+    if (useInAppFaceTracking() || forceInApp) {
+        addDependency("${cnsdkPath}/android/third_party/snpe-release.aar")
+    }
+}
+
+
+
 @Suppress("UnstableApiUsage")
 android {
     namespace = "org.citra.citra_emu"
@@ -40,9 +104,26 @@ android {
         jvmTarget = "17"
     }
 
+    if (shouldAddDebugInfo()) {
+        packaging {
+            jniLibs.keepDebugSymbols.add("**/*.so")
+
+            jniLibs {
+                keepDebugSymbols.add("**/*.so")
+            }
+        }
+
+//        ndk {
+//            debugSymbolLevel.set("FULL")
+//        }
+    }
+
     packaging {
         // This is necessary for libadrenotools custom driver loading
         jniLibs.useLegacyPackaging = true
+
+        resources.pickFirsts.add("**/libleiaSDK.so")
+        resources.pickFirsts.add("**/lib*blink.so")
     }
 
     buildFeatures {
@@ -73,7 +154,8 @@ android {
                 arguments(
                     "-DENABLE_QT=0", // Don't use QT
                     "-DENABLE_SDL2=0", // Don't use SDL
-                    "-DANDROID_ARM_NEON=true" // cryptopp requires Neon to work
+                    "-DANDROID_ARM_NEON=true", // cryptopp requires Neon to work
+                    "-DCMAKE_OBJECT_PATH_MAX=1024"
                 )
             }
         }
@@ -93,6 +175,8 @@ android {
             }
         }
     }
+
+
 
     // Define build types, which are orthogonal to product flavors.
     buildTypes {
@@ -186,7 +270,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("io.coil-kt:coil:2.2.2")
+    addSdkDependency(false)
 }
+
 
 // Download Vulkan Validation Layers from the KhronosGroup GitHub.
 val downloadVulkanValidationLayers = tasks.register<Download>("downloadVulkanValidationLayers") {

@@ -23,3 +23,8 @@
 -dontwarn java.beans.Introspector
 -dontwarn java.beans.VetoableChangeListener
 -dontwarn java.beans.VetoableChangeSupport
+
+-keep class com.leia.sdk.** { *; }
+-keep class com.leia.core.** { *; }
+-keep class com.leia.internal.** { *; }
+-keep class com.leia.headtracking.** { *; }

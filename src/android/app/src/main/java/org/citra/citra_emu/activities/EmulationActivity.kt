@@ -43,11 +43,80 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
-import com.leia.core.LogLevel
-import com.leia.sdk.LeiaSDK
+private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, AutoCloseable {
+	private val TAG = LWERenderer::class.java.simpleName
+
+	var lweCore: LWE_Core? = null
+
+	private var width = 0
+	private var height = 0
+	private var isSizeDirty = false
+
+	private var enableBacklight = true
+
+	fun onPause() {
+		lweCore?.onPause()
+	}
+
+	fun onResume() {
+		lweCore?.onResume()
+	}
+
+	fun setBacklight(enable: Boolean) {
+		if (lweCore != null) {
+			lweCore?.setBacklight(enable)
+		} else {
+			enableBacklight = enable
+		}
+	}
+
+	override fun close() {
+		lweCore?.close()
+		lweCore = null
+	}
+
+	override fun onSurfaceCreated(p0: GL10?, p1: EGLConfig?) {
+		Log.d(TAG, "onSurfaceCreated")
+	}
+
+	override fun onSurfaceChanged(p0: GL10?, width: Int, height: Int) {
+		Log.d(TAG, "onSurfaceChanged")
+		this.width = width
+		this.height = height
+		this.isSizeDirty = true
+	}
+
+	override fun onDrawFrame(p0: GL10?) {
+		Log.d(TAG, "onDrawFrame")
+		if (lweCore == null) { tryInit() }
+
+		val lweCore = lweCore
+		if (lweCore != null) {
+			lweCore.tick(1.0 / 60.0)
+
+			if (lweCore.isInitialized) {
+				if (isSizeDirty) {
+					isSizeDirty = false
+					lweCore.onWindowSizeChanged(width, height)
+				}
+				lweCore.render()
+			}
+		}
+	}
+
+	private fun tryInit() {
+		if (EGL14.eglGetCurrentContext() == EGL14.EGL_NO_CONTEXT) {
+			return
+		}
+
+		lweCore = LWE_Core(activity)
+		lweCore?.setBacklight(enableBacklight)
+	}
+}
 
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
-    private var leiaSDK: LeiaSDK? = null
+    private lateinit var lweRenderer: LWERenderer
+	private lateinit var surfaceView: GLSurfaceView
 
     private val preferences: SharedPreferences
         get() = PreferenceManager.getDefaultSharedPreferences(CitraApplication.appContext)
@@ -68,17 +137,21 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 
         super.onCreate(savedInstanceState)
 
-        // Initialize the Leia SDK
+        // Initialize the Leia Renderer
         try {
-            val initArgs = LeiaSDK.InitArgs().apply {
-                delegate = this@EmulationActivity
-                platform.activity = this@EmulationActivity
-                platform.logLevel = LogLevel.Trace
-                platform.context = applicationContext
-                faceTrackingServerLogLevel = LogLevel.Trace
-                enableFaceTracking = true
+            lweRenderer = LWERenderer(this)
+
+            surfaceView = findViewById(R.id.fragment_container)
+
+            surfaceView.setOnTouchListener OnTouchListener@{ view, motionEvent -> Boolean
+                surfaceView.queueEvent { lweRenderer.lweCore?.processGuiEvent(motionEvent) }
+                return@OnTouchListener true
             }
-            leiaSDK = LeiaSDK.createSDK(initArgs)
+
+            surfaceView.setEGLContextClientVersion(3)
+            surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+            surfaceView.setPreserveEGLContextOnPause(true)
+            surfaceView.setRenderer(lweRenderer)
         } catch (e: Exception) {
             Log.e("[EmulationActivity]", "Error: ${e.toString()}")
             e.printStackTrace()
@@ -111,11 +184,13 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
     // onWindowFocusChanged to prevent the unwanted status bar state.
     override fun onResume() {
         super.onResume()
+		surfaceView.queueEvent { lweRenderer.onResume() }
         enableFullscreenImmersive()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        surfaceView.queueEvent { lweRenderer.setBacklight(hasFocus) }
         enableFullscreenImmersive()
     }
 
@@ -128,7 +203,18 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         EmulationLifecycleUtil.clear()
         stopForegroundService(this)
         super.onDestroy()
+        lweRenderer.close()
     }
+
+    override fun onStop () {
+		super.onStop();
+		surfaceView.queueEvent { lweRenderer.onPause() }
+	}
+
+	override fun onPause() {
+		surfaceView.queueEvent { lweRenderer.onPause() }
+		super.onPause()
+	}
 
     override fun onRequestPermissionsResult(
         requestCode: Int,

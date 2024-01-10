@@ -1,3 +1,7 @@
+list(APPEND CMAKE_PREFIX_PATH "K:/Code/citra/src/android/cnsdk-android-0.7.28")
+find_package(CNSDK CONFIG REQUIRED)
+target_link_libraries(citra-android CNSDK::leiaSDK)
+
 add_library(citra-android SHARED
     android_common/android_common.cpp
     android_common/android_common.h
@@ -42,3 +46,4 @@ if ("arm64" IN_LIST ARCHITECTURE)
 endif()
 
 set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} citra-android)
+
