@@ -4,6 +4,8 @@
 
 import java.util.Properties
 import android.databinding.tool.ext.capitalizeUS
+import com.android.build.api.dsl.Packaging
+import com.android.build.gradle.internal.dsl.PackagingOptions
 import de.undercouch.gradle.tasks.download.Download
 
 plugins {
