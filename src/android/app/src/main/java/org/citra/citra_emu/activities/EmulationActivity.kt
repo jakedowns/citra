@@ -43,7 +43,12 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
-class EmulationActivity : AppCompatActivity() {
+import com.leia.core.LogLevel
+import com.leia.sdk.LeiaSDK
+
+class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
+    private var leiaSDK: LeiaSDK? = null
+
     private val preferences: SharedPreferences
         get() = PreferenceManager.getDefaultSharedPreferences(CitraApplication.appContext)
     private var foregroundService: Intent? = null
@@ -62,6 +67,22 @@ class EmulationActivity : AppCompatActivity() {
         settingsViewModel.settings.loadSettings()
 
         super.onCreate(savedInstanceState)
+
+        // Initialize the Leia SDK
+        try {
+            val initArgs = LeiaSDK.InitArgs().apply {
+                delegate = this@EmulationActivity
+                platform.activity = this@EmulationActivity
+                platform.logLevel = LogLevel.Trace
+                platform.context = applicationContext
+                faceTrackingServerLogLevel = LogLevel.Trace
+                enableFaceTracking = true
+            }
+            leiaSDK = LeiaSDK.createSDK(initArgs)
+        } catch (e: Exception) {
+            Log.e("[EmulationActivity]", "Error: ${e.toString()}")
+            e.printStackTrace()
+        }
 
         binding = ActivityEmulationBinding.inflate(layoutInflater)
         screenAdjustmentUtil = ScreenAdjustmentUtil(windowManager, settingsViewModel.settings)
@@ -446,6 +467,23 @@ class EmulationActivity : AppCompatActivity() {
 
             OnFilePickerResult(result.toString())
         }
+    
+    // Implement the LeiaSDK.Delegate methods
+    override fun didInitialize(leiaSDK: LeiaSDK) {
+        // Handle SDK initialization
+    }
+
+    override fun onFaceTrackingFatalError(leiaSDK: LeiaSDK) {
+        // Handle face tracking fatal error
+    }
+
+    override fun onFaceTrackingStarted(leiaSDK: LeiaSDK) {
+        // Handle start of face tracking
+    }
+
+    override fun onFaceTrackingStopped(leiaSDK: LeiaSDK) {
+        // Handle stop of face tracking
+    }
 
     companion object {
         fun stopForegroundService(activity: Activity) {

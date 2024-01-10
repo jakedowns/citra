@@ -1,0 +1,35 @@
+Leia Inc. Software License
+
+IMPORTANT: PLEASE READ THIS SOFTWARE LICENSE AGREEMENT CAREFULLY BEFORE USING THE SOFTWARE. BY USING THE SOFTWARE, YOU AGREE TO BE BOUND BY THE TERMS OF THIS LICENSE AGREEMENT.
+
+This Software License Agreement (the "Agreement") is entered into between you (hereinafter referred to as "Licensee") and Leia Inc. (hereinafter referred to as "Licensor"). This Agreement governs the use of the software provided by Licensor, including any updates or enhancements thereto (collectively, the "Software").
+
+1. Grant of License:
+Subject to the terms and conditions of this Agreement, Licensor hereby grants Licensee a non-exclusive, non-transferable, revocable license to use the Software for the sole purpose of developing applications compatible with Leia devices, including but not limited to Lume Pad 2 and Nubia Pad 3D (the "Devices").
+
+2. Leia Developer Account and Agreement:
+a) Leia Developer Account: Licensee acknowledges and agrees that in order to access and use the Software, a valid Leia Developer Account is required. Licensee must register and maintain an active Leia Developer Account as per Leia Inc.'s terms and conditions.
+b) Leia Developer Agreement: Licensee further acknowledges and agrees that any use of the Software requires the Licensee to enter into a separate Leia Developer Agreement with Leia Inc. The Leia Developer Agreement will govern the terms and conditions of use, including but not limited to the development, distribution, and commercialization of applications using the Software.
+
+3. Restrictions:
+a) Licensee shall not sublicense, sell, distribute, lease, rent, or otherwise transfer the Software or any part thereof to any third party.
+b) Licensee shall not modify, reverse engineer, decompile, disassemble, or create derivative works based on the Software, except to the extent permitted by applicable law.
+c) Licensee shall not use the Software for any unlawful or unauthorized purpose or in any manner that violates any applicable laws, regulations, or third-party rights.
+
+4. Intellectual Property:
+Licensee acknowledges that the Software and any related documentation, trade secrets, copyrights, trademarks, or other intellectual property rights associated with the Software are and shall remain the exclusive property of Licensor or its licensors. This Agreement does not grant Licensee any ownership or rights to the Software except as expressly set forth herein.
+
+5. Term and Termination:
+This Agreement shall remain in effect until terminated. Licensor may terminate this Agreement immediately upon written notice if Licensee breaches any provisions contained herein. Upon termination, Licensee shall cease all use of the Software and delete or destroy any copies of the Software in Licensee's possession or control.
+
+6. Disclaimer of Warranty:
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE OR UNINTERRUPTED OR THAT THE FUNCTIONS CONTAINED IN THE SOFTWARE WILL MEET LICENSEE'S REQUIREMENTS.
+
+7. Limitation of Liability:
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR IN CONNECTION WITH THE USE OF THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+8. Governing Law and Jurisdiction:
+This Agreement shall be governed by and construed in accordance with the laws of the State of California, without giving effect to its conflict of laws principles. Any disputes arising out of or in connection with this Agreement shall be subject to the exclusive jurisdiction of the courts located in the aforementioned jurisdiction.
+
+9. Entire Agreement:
+This Agreement constitutes the entire agreement between License
