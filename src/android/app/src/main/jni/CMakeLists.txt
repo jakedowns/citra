@@ -1,6 +1,14 @@
-list(APPEND CMAKE_PREFIX_PATH "K:/Code/citra/src/android/cnsdk-android-0.7.28")
-find_package(CNSDK CONFIG REQUIRED)
-target_link_libraries(citra-android CNSDK::leiaSDK)
+#list(APPEND CMAKE_PREFIX_PATH "K:/Code/citra/src/android/cnsdk-android-0.7.28")
+#find_package(CNSDK CONFIG REQUIRED)
+
+set(MY_CMAKE_SCRIPT_PATH "K:/Code/citra/src/android/cnsdk-android-0.7.28/share/cmake/CNSDK/CNSDKConfig.cmake")
+if(EXISTS ${MY_CMAKE_SCRIPT_PATH})
+    include(${MY_CMAKE_SCRIPT_PATH})
+else()
+    message(FATAL_ERROR "CNSDKConfig.cmake not found!")
+endif()
+
+
 
 add_library(citra-android SHARED
     android_common/android_common.cpp
@@ -44,6 +52,8 @@ target_link_libraries(citra-android PRIVATE android camera2ndk EGL glad inih jni
 if ("arm64" IN_LIST ARCHITECTURE)
     target_link_libraries(citra-android PRIVATE adrenotools)
 endif()
+
+target_link_libraries(citra-android CNSDK::leiaSDK)
 
 set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} citra-android)
 

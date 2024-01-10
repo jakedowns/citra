@@ -37,24 +37,24 @@ check(localPropertiesFile.exists())
 localPropertiesFile.reader(charset = Charsets.UTF_8).use { reader ->
     properties.load(reader)
 }
-extra.set("cnsdkPath", properties.getProperty("cnsdk.dir").also {
+//extra.set("cnsdkPath", properties.getProperty("cnsdk.dir").also {
+//    check(it != null) { "cnsdk.dir not set in local.properties" }
+//    if (!File(it).isAbsolute) {
+//        File(rootProject.projectDir, it).absolutePath
+//    } else {
+//        File(it).absolutePath
+//    }
+//}.apply {
+//    println("CNSDK directory: $this")
+//})
+val cnsdkPath: String = properties.getProperty("cnsdk.dir").also {
     check(it != null) { "cnsdk.dir not set in local.properties" }
     if (!File(it).isAbsolute) {
         File(rootProject.projectDir, it).absolutePath
     } else {
         File(it).absolutePath
     }
-}.apply {
-    println("CNSDK directory: $this")
-})
-val cnsdkPath: String by extra(properties.getProperty("cnsdk.dir").also {
-    check(it != null) { "cnsdk.dir not set in local.properties" }
-    if (!File(it).isAbsolute) {
-        File(rootProject.projectDir, it).absolutePath
-    } else {
-        File(it).absolutePath
-    }
-})
+}
 println("CNSDK directory: $cnsdkPath")
 val getCNSDKVersionName: () -> String = {
     file(File(cnsdkPath, "VERSION.txt")).readText()
@@ -139,7 +139,7 @@ android {
     defaultConfig {
         // TODO If this is ever modified, change application_id in strings.xml
         applicationId = "org.citra.citra_emu"
-        minSdk = 28
+        minSdk = 29
         targetSdk = 34
         versionCode = autoVersion
         versionName = getGitVersion()
