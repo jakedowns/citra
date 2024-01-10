@@ -8,7 +8,7 @@
     <string name="app_notification_channel_id" translatable="false">Citra</string>
     <string name="app_notification_channel_description">Citra 3DS emulator notifications</string>
     <string name="app_notification_running">Citra is Running</string>
-    <string name="app_game_install_description">Next, you will need to select a Game Folder. Citra will display all of the 3DS ROMs inside of the selected folder in the app.\n\nCIA ROMs, updates and DLC will need to be installed separately by clicking on the folder icon and selecting Install CIA.</string>
+    <string name="app_game_install_description" translatable="false">Next, you will need to select a Game Folder. Citra will display all of the 3DS ROMs inside of the selected folder in the app.\n\nCIA ROMs, updates and DLC will need to be installed separately by clicking on the folder icon and selecting Install CIA.</string>
 
     <!-- Home Strings -->
     <string name="grid_menu_core_settings">Settings</string>
@@ -235,7 +235,9 @@
     <string name="render3d">Stereoscopic 3D Mode</string>
     <string name="factor3d">Depth</string>
     <string name="factor3d_description">Specifies the value of the 3D slider. This should be set to higher than 0% when Stereoscopic 3D is enabled.</string>
-    <string name="cardboard_vr">Cardboard VR</string>
+    <string name="cardboard_vr" translatable="false">Cardboard VR</string>
+    <string name="lumepad_1" translatable="false">Lumepad 1</string>
+    <string name="lumepad_2" translatable="false">Lumepad 2</string>
     <string name="cardboard_screen_size">Cardboard Screen Size</string>
     <string name="cardboard_screen_size_description">Scales the screen to a percentage of its original size.</string>
     <string name="cardboard_x_shift">Horizontal Shift</string>
