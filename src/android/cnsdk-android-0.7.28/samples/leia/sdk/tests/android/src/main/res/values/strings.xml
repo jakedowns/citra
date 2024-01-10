@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">LeiaSDK Test</string>
+    <string name="movie_button">Run Stress Test! \n (32MB Download)</string>
+    <string name="picture_button">Stereo Glass</string>
+    <string name="scroll_button">Toggle ScrollView</string>
+    <string name="video_2d_button">2D Video</string>
+    <string name="viewPager_button">ViewPager</string>
+    <string name="cube_button">Cube</string>
+</resources>

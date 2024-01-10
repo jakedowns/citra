@@ -1,0 +1,80 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    ext.kotlin_version = '1.6.10'
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'com.android.application' version '7.1.2' apply false
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+def isStandalone() { return true }
+def shouldBuildArm32() { return false }
+def shouldAddDebugInfo() { return true }
+def useInAppFaceTracking() { return false }
+
+def setDefaultCmakeArguments(arguments) {
+    arguments.add("-DANDROID_ARM_NEON=TRUE")
+    arguments.add("-DCMAKE_OBJECT_PATH_MAX=1024")
+}
+
+def getCNSDKVersionName() {
+    return rootProject.file(new File(rootProject.cnsdkPath, "VERSION.txt")).text
+}
+
+def getCNSDKLibName(forceInApp) {
+    if (useInAppFaceTracking() || forceInApp) {
+        return "sdk-faceTrackingInApp-${getCNSDKVersionName()}.aar"
+    } else {
+        return "sdk-faceTrackingService-${getCNSDKVersionName()}.aar"
+    }
+}
+
+def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
+def properties = new Properties()
+
+assert localPropertiesFile.exists()
+localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+
+project.ext {
+    cnsdkPath = properties.getProperty("cnsdk.dir")
+    assert cnsdkPath != null, "cnsdk.dir not set in local.properties"
+    if (!(new File(cnsdkPath)).isAbsolute()) {
+        cnsdkPath = (new File(rootProject.projectDir, cnsdkPath)).getAbsolutePath()
+    }
+    println "CNSDK directory: $cnsdkPath"
+
+    // Native samples (lweTest, lweJavaTest) link to shared libraries from cnsdk aar
+    copy {
+        from zipTree("${cnsdkPath}/android/${getCNSDKLibName(false)}")
+        include 'jni/*/*.so'
+        into "${cnsdkPath}/lib"
+    }
+}
+
+def addDependency(dependencies, depFile) {
+    assert file(depFile).exists()
+    dependencies.add('implementation', files(depFile))
+}
+
+def addSdkDependency(dependencies, forceInApp) {
+    addDependency(dependencies, "${rootProject.cnsdkPath}/android/${getCNSDKLibName(forceInApp)}")
+    if (useInAppFaceTracking() || forceInApp) {
+        addDependency(dependencies, "${rootProject.cnsdkPath}/android/third_party/snpe-release.aar")
+    }
+}
+
+ext.repoDir = new File(rootDir, '..')
+def getRelativeRepoPath(String relativePath) {
+    def dir = new File(repoDir, relativePath)
+    return dir.absolutePath
+}
