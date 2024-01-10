@@ -1,0 +1,29 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'CNSDKSamples'
+
+include ':sdk-test'
+project(':sdk-test').projectDir = new File(settingsDir, '../leia/sdk/tests/android')
+
+include ':sdk-sharedCamera-test'
+project(':sdk-sharedCamera-test').projectDir = new File(settingsDir, '../leia/sdk/tests/androidSharedCamera')
+
+include ':lweTest'
+project(':lweTest').projectDir = new File(settingsDir, '../leia/lwEngine/tests/android')
+
+include ':lweJavaTest'
+project(':lweJavaTest').projectDir = new File(settingsDir, '../leia/lwEngine/tests/androidJava')
