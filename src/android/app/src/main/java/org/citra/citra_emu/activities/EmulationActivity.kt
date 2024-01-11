@@ -54,6 +54,7 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
+import com.leia.lwe.java.sample.LWE_Core
 
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 	private lateinit var surfaceView: GLSurfaceView

@@ -270,6 +270,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("io.coil-kt:coil:2.2.2")
+    implementation(files("src/android/cnsdk-android-0.7.28/samples/leia/lwEngine/tests/androidJava/src/main/java/com/leia/lwe/java.sample.LWE_Core.java"))
     addSdkDependency(false)
 }
 
