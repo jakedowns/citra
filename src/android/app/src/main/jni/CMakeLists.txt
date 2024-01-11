@@ -53,7 +53,7 @@ if ("arm64" IN_LIST ARCHITECTURE)
     target_link_libraries(citra-android PRIVATE adrenotools)
 endif()
 
-target_link_libraries(citra-android CNSDK::leiaSDK)
+target_link_libraries(citra-android PRIVATE CNSDK::leiaSDK)
 
 set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} citra-android)
 

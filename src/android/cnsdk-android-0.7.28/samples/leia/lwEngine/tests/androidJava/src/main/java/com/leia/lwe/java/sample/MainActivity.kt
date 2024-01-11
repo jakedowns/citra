@@ -68,7 +68,7 @@ private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, Auto
 		this.width = width
 		this.height = height
 		this.isSizeDirty = true
-}
+	}
 
 	override fun onDrawFrame(p0: GL10?) {
 		Log.d(TAG, "onDrawFrame")
