@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -43,6 +44,7 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
+import com.leia.lwe.java.sample.LWE_Core
 
 private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, AutoCloseable {
 	private val TAG = LWERenderer::class.java.simpleName
