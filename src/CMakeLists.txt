@@ -195,7 +195,6 @@ endif()
 if (ANDROID)
     add_subdirectory(android/app/src/main/jni)
     target_include_directories(citra-android PRIVATE android/app/src/main)
-    target_link_options(citra-android PRIVATE "-fuse-ld=lld")
 endif()
 
 if (ENABLE_WEB_SERVICE)
