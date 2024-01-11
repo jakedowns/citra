@@ -11,8 +11,10 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.opengl.EGLConfig
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -43,14 +45,20 @@ import org.citra.citra_emu.utils.ForegroundService
 import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
-import com.leia.lwe.java.sample.LWE_Core
+import com.leia.LWE_Core
+import com.leia.core.LogLevel
+import com.leia.core.SharedCameraSink
+import com.leia.sdk.FaceTrackingRuntime
+import com.leia.sdk.LeiaSDK
+import com.leia.sdk.views.InputViewsAsset
+import javax.microedition.khronos.opengles.GL10
 
 private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, AutoCloseable {
 	private val TAG = LWERenderer::class.java.simpleName
 
 	var lweCore: LWE_Core? = null
 
-	private var width = 0
+    private var width = 0
 	private var height = 0
 	private var isSizeDirty = false
 
