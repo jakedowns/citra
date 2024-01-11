@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.GLSurfaceView
 import android.os.Bundle
@@ -46,12 +47,8 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
-import com.leia.LWE_Core
-import com.leia.core.LogLevel
-import com.leia.core.SharedCameraSink
-import com.leia.sdk.FaceTrackingRuntime
 import com.leia.sdk.LeiaSDK
-import com.leia.sdk.views.InputViewsAsset
+import com.leia.LWE_Core
 import javax.microedition.khronos.opengles.GL10
 
 private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, AutoCloseable {
@@ -86,11 +83,11 @@ private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, Auto
 		lweCore = null
 	}
 
-	override fun onSurfaceCreated(p0: GL10?, p1: EGLConfig?) {
-		Log.d(TAG, "onSurfaceCreated")
-	}
+    override fun onSurfaceCreated(gl: GL10?, config: javax.microedition.khronos.egl.EGLConfig?) {
+        Log.d(TAG, "onSurfaceCreated")
+    }
 
-	override fun onSurfaceChanged(p0: GL10?, width: Int, height: Int) {
+    override fun onSurfaceChanged(p0: GL10?, width: Int, height: Int) {
 		Log.d(TAG, "onSurfaceChanged")
 		this.width = width
 		this.height = height
