@@ -54,7 +54,13 @@ import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
-import com.leia.lwe.java.sample.LWE_Core
+import com.leia.LWE_Core
+import com.leia.core.LogLevel
+import com.leia.core.SharedCameraSink
+import com.leia.sdk.FaceTrackingRuntime
+import com.leia.sdk.LeiaSDK
+import com.leia.sdk.views.InputViewsAsset
+import javax.microedition.khronos.opengles.GL10
 
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 	private lateinit var surfaceView: GLSurfaceView
