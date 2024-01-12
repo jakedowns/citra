@@ -16,6 +16,8 @@ import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -30,6 +32,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.fragment.NavHostFragment
 import androidx.preference.PreferenceManager
+import com.leia.core.LogLevel
+import com.leia.sdk.LeiaSDK
+import javax.microedition.khronos.opengles.GL10
 import org.citra.citra_emu.CitraApplication
 import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.R
@@ -42,17 +47,22 @@ import org.citra.citra_emu.features.settings.model.SettingsViewModel
 import org.citra.citra_emu.features.settings.model.view.InputBindingSetting
 import org.citra.citra_emu.fragments.MessageDialogFragment
 import org.citra.citra_emu.utils.ControllerMappingHelper
+import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.FileBrowserHelper
 import org.citra.citra_emu.utils.ForegroundService
 import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
-import com.leia.sdk.LeiaSDK
-import javax.microedition.khronos.opengles.GL10
 
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 	private lateinit var surfaceView: GLSurfaceView
+    private var isCnsdkInitialized = false
+
+    private val cnsdkDelegateMutex = Object()
+    private var subDelegates = mutableSetOf<LeiaSDK.Delegate>()
+
+    private var mainThreadHandler: Handler? = null
 
     private val preferences: SharedPreferences
         get() = PreferenceManager.getDefaultSharedPreferences(CitraApplication.appContext)
@@ -73,6 +83,7 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 
         super.onCreate(savedInstanceState)
 
+        mainThreadHandler = Handler(Looper.getMainLooper())
         // Initialize Leia SDK
         initLeiaSDK();
 
@@ -108,8 +119,11 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         try {
             val initArgs = LeiaSDK.InitArgs().apply {
                 platform.app = this@EmulationActivity.application
+                platform.logLevel = LogLevel.Trace
+                faceTrackingServerLogLevel = LogLevel.Trace
                 delegate = this@EmulationActivity
-                // Set other necessary properties for initArgs
+                enableFaceTracking = false
+                startFaceTracking = false
             }
             LeiaSDK.createSDK(initArgs)
         } catch (e: Exception) {
@@ -490,11 +504,20 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
     
     // Implement the LeiaSDK.Delegate methods
     override fun didInitialize(leiaSDK: LeiaSDK) {
-        // Handle SDK initialization
+        synchronized(cnsdkDelegateMutex) {
+            isCnsdkInitialized = true
+            subDelegates.forEach { it.didInitialize(leiaSDK) }
+        }
     }
 
     override fun onFaceTrackingFatalError(leiaSDK: LeiaSDK) {
-        // Handle face tracking fatal error
+//        synchronized(cnsdkDelegateMutex) {
+//            subDelegates.forEach { it.onFaceTrackingFatalError(leiaSDK) }
+//        }
+
+        // When face tracking encounters a fatal error, it's no longer can be used.
+        // The best we can do is to disable it, and possibly attempt to enable it later.
+        mainThreadHandler?.post { leiaSDK.enableFaceTracking(false) }
     }
 
     override fun onFaceTrackingStarted(leiaSDK: LeiaSDK) {
