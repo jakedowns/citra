@@ -7,6 +7,7 @@ package org.citra.citra_emu.activities
 import android.Manifest.permission
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.Application
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -48,82 +49,9 @@ import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 import com.leia.sdk.LeiaSDK
-import com.leia.LWE_Core
 import javax.microedition.khronos.opengles.GL10
 
-private class LWERenderer(val activity: Activity) : GLSurfaceView.Renderer, AutoCloseable {
-	private val TAG = LWERenderer::class.java.simpleName
-
-	var lweCore: LWE_Core? = null
-
-    private var width = 0
-	private var height = 0
-	private var isSizeDirty = false
-
-	private var enableBacklight = true
-
-	fun onPause() {
-		lweCore?.onPause()
-	}
-
-	fun onResume() {
-		lweCore?.onResume()
-	}
-
-	fun setBacklight(enable: Boolean) {
-		if (lweCore != null) {
-			lweCore?.setBacklight(enable)
-		} else {
-			enableBacklight = enable
-		}
-	}
-
-	override fun close() {
-		lweCore?.close()
-		lweCore = null
-	}
-
-    override fun onSurfaceCreated(gl: GL10?, config: javax.microedition.khronos.egl.EGLConfig?) {
-        Log.d(TAG, "onSurfaceCreated")
-    }
-
-    override fun onSurfaceChanged(p0: GL10?, width: Int, height: Int) {
-		Log.d(TAG, "onSurfaceChanged")
-		this.width = width
-		this.height = height
-		this.isSizeDirty = true
-	}
-
-	override fun onDrawFrame(p0: GL10?) {
-		Log.d(TAG, "onDrawFrame")
-		if (lweCore == null) { tryInit() }
-
-		val lweCore = lweCore
-		if (lweCore != null) {
-			lweCore.tick(1.0 / 60.0)
-
-			if (lweCore.isInitialized) {
-				if (isSizeDirty) {
-					isSizeDirty = false
-					lweCore.onWindowSizeChanged(width, height)
-				}
-				lweCore.render()
-			}
-		}
-	}
-
-	private fun tryInit() {
-		if (EGL14.eglGetCurrentContext() == EGL14.EGL_NO_CONTEXT) {
-			return
-		}
-
-		lweCore = LWE_Core(activity)
-		lweCore?.setBacklight(enableBacklight)
-	}
-}
-
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
-    private lateinit var lweRenderer: LWERenderer
 	private lateinit var surfaceView: GLSurfaceView
 
     private val preferences: SharedPreferences
@@ -145,25 +73,8 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 
         super.onCreate(savedInstanceState)
 
-        // Initialize the Leia Renderer
-        try {
-            lweRenderer = LWERenderer(this)
-
-            surfaceView = findViewById(R.id.fragment_container)
-
-            surfaceView.setOnTouchListener OnTouchListener@{ view, motionEvent -> Boolean
-                surfaceView.queueEvent { lweRenderer.lweCore?.processGuiEvent(motionEvent) }
-                return@OnTouchListener true
-            }
-
-            surfaceView.setEGLContextClientVersion(3)
-            surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
-            surfaceView.setPreserveEGLContextOnPause(true)
-            surfaceView.setRenderer(lweRenderer)
-        } catch (e: Exception) {
-            Log.e("[EmulationActivity]", "Error: ${e.toString()}")
-            e.printStackTrace()
-        }
+        // Initialize Leia SDK
+        initLeiaSDK();
 
         binding = ActivityEmulationBinding.inflate(layoutInflater)
         screenAdjustmentUtil = ScreenAdjustmentUtil(windowManager, settingsViewModel.settings)
@@ -193,18 +104,30 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         EmulationLifecycleUtil.addShutdownHook(hook = { this.finish() })
     }
 
+    private fun initLeiaSDK() {
+        try {
+            val initArgs = LeiaSDK.InitArgs().apply {
+                platform.app = this@EmulationActivity.application
+                delegate = this@EmulationActivity
+                // Set other necessary properties for initArgs
+            }
+            LeiaSDK.createSDK(initArgs)
+        } catch (e: Exception) {
+            Log.e("[EmulationActivity]", "Error initializing LeiaSDK: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
     // On some devices, the system bars will not disappear on first boot or after some
     // rotations. Here we set full screen immersive repeatedly in onResume and in
     // onWindowFocusChanged to prevent the unwanted status bar state.
     override fun onResume() {
         super.onResume()
-		surfaceView.queueEvent { lweRenderer.onResume() }
         enableFullscreenImmersive()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        surfaceView.queueEvent { lweRenderer.setBacklight(hasFocus) }
         enableFullscreenImmersive()
     }
 
@@ -217,16 +140,13 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         EmulationLifecycleUtil.clear()
         stopForegroundService(this)
         super.onDestroy()
-        lweRenderer.close()
     }
 
     override fun onStop () {
 		super.onStop();
-		surfaceView.queueEvent { lweRenderer.onPause() }
 	}
 
 	override fun onPause() {
-		surfaceView.queueEvent { lweRenderer.onPause() }
 		super.onPause()
 	}
 
