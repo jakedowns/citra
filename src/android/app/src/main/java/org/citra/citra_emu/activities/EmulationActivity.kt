@@ -55,7 +55,6 @@ import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 import com.leia.sdk.LeiaSDK
-import com.leia.LWE_Core
 import javax.microedition.khronos.opengles.GL10
 
 class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
@@ -140,13 +139,11 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
     // onWindowFocusChanged to prevent the unwanted status bar state.
     override fun onResume() {
         super.onResume()
-		surfaceView.queueEvent { lweRenderer.onResume() }
         enableFullscreenImmersive()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        surfaceView.queueEvent { lweRenderer.setBacklight(hasFocus) }
         enableFullscreenImmersive()
     }
 
@@ -159,7 +156,6 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         EmulationLifecycleUtil.clear()
         stopForegroundService(this)
         super.onDestroy()
-        lweRenderer.close()
     }
 
     override fun onStop () {
