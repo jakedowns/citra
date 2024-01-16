@@ -1,4 +1,4 @@
-package com.simongellis.leia.webxr
+package org.citra.citra_emu.vendor.simongellis.leia.webxr
 
 interface Renderer {
     fun onSurfaceCreated()

@@ -68,7 +68,7 @@ import org.citra.citra_emu.utils.Log
 import org.citra.citra_emu.utils.ViewUtils
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
-import com.simongellis.leia.webxr.LeiaSurfaceView
+import org.citra.citra_emu.vendor.simongellis.leia.webxr.LeiaSurfaceView
 
 class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.FrameCallback {
     private val preferences: SharedPreferences
