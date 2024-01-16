@@ -7,13 +7,10 @@ package org.citra.citra_emu.activities
 import android.Manifest.permission
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.Application
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.opengl.EGL14
-import android.opengl.EGLConfig
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.os.Handler
@@ -34,7 +31,6 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.preference.PreferenceManager
 import com.leia.core.LogLevel
 import com.leia.sdk.LeiaSDK
-import javax.microedition.khronos.opengles.GL10
 import org.citra.citra_emu.CitraApplication
 import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.R
@@ -47,7 +43,6 @@ import org.citra.citra_emu.features.settings.model.SettingsViewModel
 import org.citra.citra_emu.features.settings.model.view.InputBindingSetting
 import org.citra.citra_emu.fragments.MessageDialogFragment
 import org.citra.citra_emu.utils.ControllerMappingHelper
-import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.FileBrowserHelper
 import org.citra.citra_emu.utils.ForegroundService
 import org.citra.citra_emu.utils.EmulationLifecycleUtil
