@@ -12,60 +12,38 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.view.Choreographer
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
-import android.widget.PopupMenu
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.core.content.res.ResourcesCompat
-import androidx.core.graphics.Insets
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.drawerlayout.widget.DrawerLayout
-import androidx.drawerlayout.widget.DrawerLayout.DrawerListener
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.navigation.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.slider.Slider
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.citra.citra_emu.CitraApplication
-import org.citra.citra_emu.EmulationNavigationDirections
 import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.R
 import org.citra.citra_emu.activities.EmulationActivity
 import org.citra.citra_emu.databinding.DialogCheckboxBinding
-import org.citra.citra_emu.databinding.DialogSliderBinding
 import org.citra.citra_emu.databinding.FragmentEmulationBinding
 import org.citra.citra_emu.display.ScreenAdjustmentUtil
-import org.citra.citra_emu.display.ScreenLayout
 import org.citra.citra_emu.features.settings.model.SettingsViewModel
-import org.citra.citra_emu.features.settings.ui.SettingsActivity
-import org.citra.citra_emu.features.settings.utils.SettingsFile
 import org.citra.citra_emu.model.Game
 import org.citra.citra_emu.utils.DirectoryInitialization
 import org.citra.citra_emu.utils.DirectoryInitialization.DirectoryInitializationState
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.FileUtil
 import org.citra.citra_emu.utils.GameHelper
-import org.citra.citra_emu.utils.GameIconUtils
 import org.citra.citra_emu.utils.EmulationLifecycleUtil
 import org.citra.citra_emu.utils.Log
-import org.citra.citra_emu.utils.ViewUtils
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
 import org.citra.citra_emu.vendor.simongellis.leia.webxr.LeiaSurfaceView
@@ -76,6 +54,8 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
 
     private lateinit var emulationState: EmulationState
     private var perfStatsUpdater: Runnable? = null
+
+    private lateinit var surfaceView: LeiaSurfaceView
 
     private lateinit var emulationActivity: EmulationActivity
 
@@ -167,178 +147,18 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         // attempting to integrate leia sdk here
-        LeiaSurfaceView surfaceView = binding.surfaceEmulation; // contents.findViewById(R.id.surface_emulation);
-        surfaceView.getHolder().addCallback(this);
+        surfaceView = binding.surfaceEmulation // contents.findViewById(R.id.surface_emulation);
+        surfaceView.holder.addCallback(this)
 
-        // pre-leia integration, do we keep this?
-        binding.surfaceEmulation.holder.addCallback(this)
-        binding.doneControlConfig.setOnClickListener {
-            binding.doneControlConfig.visibility = View.GONE
-            binding.surfaceInputOverlay.setIsInEditMode(false)
-        }
+        // pre-leia integration:
+//        binding.surfaceEmulation.holder.addCallback(this)
+//        binding.doneControlConfig.setOnClickListener {
+//            binding.doneControlConfig.visibility = View.GONE
+//            binding.surfaceInputOverlay.setIsInEditMode(false)
+//        }
 
         // Show/hide the "Show FPS" overlay
         updateShowFpsOverlay()
-
-        binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
-        binding.drawerLayout.addDrawerListener(object : DrawerListener {
-            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {
-                binding.surfaceInputOverlay.dispatchTouchEvent(
-                    MotionEvent.obtain(
-                        SystemClock.uptimeMillis(),
-                        SystemClock.uptimeMillis() + 100,
-                        MotionEvent.ACTION_UP,
-                        0f,
-                        0f,
-                        0
-                    )
-                )
-            }
-
-            override fun onDrawerOpened(drawerView: View) {
-                binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
-            }
-
-            override fun onDrawerClosed(drawerView: View) {
-                binding.drawerLayout.setDrawerLockMode(EmulationMenuSettings.drawerLockMode)
-            }
-
-            override fun onDrawerStateChanged(newState: Int) {
-                // No op
-            }
-        })
-        binding.inGameMenu.menu.findItem(R.id.menu_lock_drawer).apply {
-            val titleId = if (EmulationMenuSettings.drawerLockMode == DrawerLayout.LOCK_MODE_LOCKED_CLOSED) {
-                R.string.unlock_drawer
-            } else {
-                R.string.lock_drawer
-            }
-            val iconId = if (EmulationMenuSettings.drawerLockMode == DrawerLayout.LOCK_MODE_UNLOCKED) {
-                R.drawable.ic_unlocked
-            } else {
-                R.drawable.ic_lock
-            }
-
-            title = getString(titleId)
-            icon = ResourcesCompat.getDrawable(
-                resources,
-                iconId,
-                requireContext().theme
-            )
-        }
-
-        binding.inGameMenu.getHeaderView(0).findViewById<TextView>(R.id.text_game_title).text =
-            game.title
-        binding.inGameMenu.setNavigationItemSelectedListener {
-            when (it.itemId) {
-                R.id.menu_emulation_pause -> {
-                    if (emulationState.isPaused) {
-                        emulationState.unpause()
-                        it.title = resources.getString(R.string.pause_emulation)
-                        it.icon = ResourcesCompat.getDrawable(
-                            resources,
-                            R.drawable.ic_pause,
-                            requireContext().theme
-                        )
-                    } else {
-                        emulationState.pause()
-                        it.title = resources.getString(R.string.resume_emulation)
-                        it.icon = ResourcesCompat.getDrawable(
-                            resources,
-                            R.drawable.ic_play,
-                            requireContext().theme
-                        )
-                    }
-                    true
-                }
-
-                R.id.menu_emulation_savestates -> {
-                    showSavestateMenu()
-                    true
-                }
-
-                R.id.menu_overlay_options -> {
-                    showOverlayMenu()
-                    true
-                }
-
-                R.id.menu_amiibo -> {
-                    showAmiiboMenu()
-                    true
-                }
-
-                R.id.menu_landscape_screen_layout -> {
-                    showScreenLayoutMenu()
-                    true
-                }
-
-                R.id.menu_swap_screens -> {
-                    screenAdjustmentUtil.swapScreen()
-                    true
-                }
-
-                R.id.menu_lock_drawer -> {
-                    when (EmulationMenuSettings.drawerLockMode) {
-                        DrawerLayout.LOCK_MODE_UNLOCKED -> {
-                            EmulationMenuSettings.drawerLockMode =
-                                DrawerLayout.LOCK_MODE_LOCKED_CLOSED
-                            it.title = resources.getString(R.string.unlock_drawer)
-                            it.icon = ResourcesCompat.getDrawable(
-                                resources,
-                                R.drawable.ic_lock,
-                                requireContext().theme
-                            )
-                        }
-
-                        DrawerLayout.LOCK_MODE_LOCKED_CLOSED -> {
-                            EmulationMenuSettings.drawerLockMode = DrawerLayout.LOCK_MODE_UNLOCKED
-                            it.title = resources.getString(R.string.lock_drawer)
-                            it.icon = ResourcesCompat.getDrawable(
-                                resources,
-                                R.drawable.ic_unlocked,
-                                requireContext().theme
-                            )
-                        }
-                    }
-                    true
-                }
-
-                R.id.menu_cheats -> {
-                    val action = EmulationNavigationDirections
-                        .actionGlobalCheatsActivity(NativeLibrary.getRunningTitleId())
-                    binding.root.findNavController().navigate(action)
-                    true
-                }
-
-                R.id.menu_settings -> {
-                    SettingsActivity.launch(
-                        requireContext(),
-                        SettingsFile.FILE_NAME_CONFIG,
-                        ""
-                    )
-                    true
-                }
-
-                R.id.menu_exit -> {
-                    NativeLibrary.pauseEmulation()
-                    MaterialAlertDialogBuilder(requireContext())
-                        .setTitle(R.string.emulation_close_game)
-                        .setMessage(R.string.emulation_close_game_message)
-                        .setPositiveButton(android.R.string.ok) { _: DialogInterface?, _: Int ->
-                            EmulationLifecycleUtil.closeGame()
-                        }
-                        .setNegativeButton(android.R.string.cancel) { _: DialogInterface?, _: Int ->
-                            NativeLibrary.unPauseEmulation()
-                        }
-                        .setOnCancelListener { NativeLibrary.unPauseEmulation() }
-                        .show()
-                    true
-                }
-
-                else -> true
-            }
-        }
-
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
@@ -347,77 +167,79 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
                         return
                     }
 
-                    if (binding.drawerLayout.isOpen) {
-                        binding.drawerLayout.close()
-                    } else {
-                        binding.drawerLayout.open()
-                    }
+//                    if (binding.drawerLayout.isOpen) {
+//                        binding.drawerLayout.close()
+//                    } else {
+//                        binding.drawerLayout.open()
+//                    }
                 }
             }
         )
 
-        GameIconUtils.loadGameIcon(requireActivity(), game, binding.loadingImage)
-        binding.loadingTitle.text = game.title
+//        GameIconUtils.loadGameIcon(requireActivity(), game, binding.loadingImage)
+//        binding.loadingTitle.text = game.title
 
         viewLifecycleOwner.lifecycleScope.apply {
+//            launch {
+//                repeatOnLifecycle(Lifecycle.State.CREATED) {
+//                    emulationViewModel.shaderProgress.collectLatest {
+//                        if (it > 0 && it != emulationViewModel.totalShaders.value) {
+//                            binding.loadingProgressIndicator.isIndeterminate = false
+//                            binding.loadingProgressText.visibility = View.VISIBLE
+//                            binding.loadingProgressText.text = String.format(
+//                                "%d/%d",
+//                                emulationViewModel.shaderProgress.value,
+//                                emulationViewModel.totalShaders.value
+//                            )
+//
+//                            if (it < binding.loadingProgressIndicator.max) {
+//                                binding.loadingProgressIndicator.progress = it
+//                            }
+//                        }
+//
+//                        if (it == emulationViewModel.totalShaders.value) {
+//                            binding.loadingText.setText(R.string.loading)
+//                            binding.loadingProgressIndicator.isIndeterminate = true
+//                            binding.loadingProgressText.visibility = View.GONE
+//                        }
+//                    }
+//                }
+//            }
             launch {
-                repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    emulationViewModel.shaderProgress.collectLatest {
-                        if (it > 0 && it != emulationViewModel.totalShaders.value) {
-                            binding.loadingProgressIndicator.isIndeterminate = false
-                            binding.loadingProgressText.visibility = View.VISIBLE
-                            binding.loadingProgressText.text = String.format(
-                                "%d/%d",
-                                emulationViewModel.shaderProgress.value,
-                                emulationViewModel.totalShaders.value
-                            )
-
-                            if (it < binding.loadingProgressIndicator.max) {
-                                binding.loadingProgressIndicator.progress = it
-                            }
-                        }
-
-                        if (it == emulationViewModel.totalShaders.value) {
-                            binding.loadingText.setText(R.string.loading)
-                            binding.loadingProgressIndicator.isIndeterminate = true
-                            binding.loadingProgressText.visibility = View.GONE
-                        }
-                    }
-                }
+//                repeatOnLifecycle(Lifecycle.State.CREATED) {
+//                    emulationViewModel.totalShaders.collectLatest {
+//                        binding.loadingProgressIndicator.max = it
+//                    }
+//                }
             }
             launch {
-                repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    emulationViewModel.totalShaders.collectLatest {
-                        binding.loadingProgressIndicator.max = it
-                    }
-                }
+//                repeatOnLifecycle(Lifecycle.State.CREATED) {
+//                    emulationViewModel.shaderMessage.collectLatest {
+//                        if (it != "") {
+//                            //binding.loadingText.text = it
+//                            Log.info("[EmulationFragment] Shader message: $it");
+//                        }
+//                    }
+//                }
             }
             launch {
-                repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    emulationViewModel.shaderMessage.collectLatest {
-                        if (it != "") {
-                            binding.loadingText.text = it
-                        }
-                    }
-                }
-            }
-            launch {
-                repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    emulationViewModel.emulationStarted.collectLatest { started ->
-                        if (started) {
-                            ViewUtils.hideView(binding.loadingIndicator)
-                            ViewUtils.showView(binding.surfaceInputOverlay)
-                            binding.inGameMenu.menu.findItem(R.id.menu_emulation_savestates)
-                                .setVisible(NativeLibrary.getSavestateInfo() != null)
-                            binding.drawerLayout.setDrawerLockMode(EmulationMenuSettings.drawerLockMode)
-                        }
-                    }
-                }
+//                repeatOnLifecycle(Lifecycle.State.CREATED) {
+//                    emulationViewModel.emulationStarted.collectLatest { started ->
+//                        if (started) {
+//                            //ViewUtils.hideView(binding.loadingIndicator)
+//                            ViewUtils.showView(binding.surfaceInputOverlay)
+//                            //binding.inGameMenu.menu.findItem(R.id.menu_emulation_savestates)
+//                            //    .setVisible(NativeLibrary.getSavestateInfo() != null)
+//                            //binding.drawerLayout.setDrawerLockMode(EmulationMenuSettings.drawerLockMode)
+//                        }
+//                    }
+//                }
             }
         }
 
-        setInsets()
+//        setInsets()
     }
+
 
     private fun togglePause() {
         if(emulationState.isPaused) {
@@ -477,7 +299,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
     }
 
-    private fun showSavestateMenu() {
+    /*private fun showSavestateMenu() {
         val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_emulation_savestates)
@@ -502,12 +324,12 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         popupMenu.show()
-    }
+    }*/
 
     private fun showSaveStateSubmenu() {
         val savestates = NativeLibrary.getSavestateInfo()
 
-        val popupMenu = PopupMenu(
+        /*val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_emulation_savestates)
         )
@@ -529,13 +351,13 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
             popupMenu.menu.getItem(it.slot - 1).setTitle(text)
         }
 
-        popupMenu.show()
+        popupMenu.show()*/
     }
 
     private fun showLoadStateSubmenu() {
         val savestates = NativeLibrary.getSavestateInfo()
 
-        val popupMenu = PopupMenu(
+        /*val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_emulation_savestates)
         )
@@ -556,7 +378,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
             popupMenu.menu.getItem(it.slot - 1).setTitle(text).setEnabled(true)
         }
 
-        popupMenu.show()
+        popupMenu.show()*/
     }
 
     private fun displaySavestateWarning() {
@@ -577,7 +399,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
             .show()
     }
 
-    private fun showOverlayMenu() {
+    /*private fun showOverlayMenu() {
         val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_overlay_options)
@@ -645,9 +467,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         popupMenu.show()
-    }
+    }*/
 
-    private fun showAmiiboMenu() {
+    /*private fun showAmiiboMenu() {
         val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_amiibo)
@@ -672,9 +494,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         popupMenu.show()
-    }
+    }*/
 
-    private fun showScreenLayoutMenu() {
+    /*private fun showScreenLayoutMenu() {
         val popupMenu = PopupMenu(
             requireContext(),
             binding.inGameMenu.findViewById(R.id.menu_landscape_screen_layout)
@@ -731,9 +553,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         popupMenu.show()
-    }
+    }*/
 
-    private fun editControlsPlacement() {
+    /*private fun editControlsPlacement() {
         if (binding.surfaceInputOverlay.isInEditMode) {
             binding.doneControlConfig.visibility = View.GONE
             binding.surfaceInputOverlay.setIsInEditMode(false)
@@ -741,9 +563,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
             binding.doneControlConfig.visibility = View.VISIBLE
             binding.surfaceInputOverlay.setIsInEditMode(true)
         }
-    }
+    }*/
 
-    private fun showToggleControlsDialog() {
+    /*private fun showToggleControlsDialog() {
         val editor = preferences.edit()
         val enabledButtons = BooleanArray(14)
         enabledButtons.forEachIndexed { i: Int, _: Boolean ->
@@ -767,9 +589,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
                 binding.surfaceInputOverlay.refreshControls()
             }
             .show()
-    }
+    }*/
 
-    private fun showAdjustScaleDialog() {
+    /*private fun showAdjustScaleDialog() {
         val sliderBinding = DialogSliderBinding.inflate(layoutInflater)
 
         sliderBinding.apply {
@@ -798,7 +620,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
                 setControlScale(50)
             }
             .show()
-    }
+    }*/
 
     private fun setControlScale(scale: Int) {
         preferences.edit()
@@ -807,7 +629,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         binding.surfaceInputOverlay.refreshControls()
     }
 
-    private fun showResetOverlayDialog() {
+    /*private fun showResetOverlayDialog() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(getString(R.string.emulation_touch_overlay_reset))
             .setPositiveButton(android.R.string.ok) { _: DialogInterface?, _: Int ->
@@ -815,9 +637,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
-    }
+    }*/
 
-    private fun resetInputOverlay() {
+    /*private fun resetInputOverlay() {
         preferences.edit()
             .putInt("controlScale", 50)
             .apply()
@@ -833,7 +655,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         editor.apply()
 
         binding.surfaceInputOverlay.resetButtonPlacement()
-    }
+    }*/
 
     fun updateShowFpsOverlay() {
         if (EmulationMenuSettings.showFps) {
@@ -881,41 +703,41 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         NativeLibrary.doFrame()
     }
 
-    private fun setInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(
-            binding.inGameMenu
-        ) { v: View, windowInsets: WindowInsetsCompat ->
-            val cutInsets: Insets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
-            var left = 0
-            var right = 0
-            if (ViewCompat.getLayoutDirection(v) == ViewCompat.LAYOUT_DIRECTION_LTR) {
-                left = cutInsets.left
-            } else {
-                right = cutInsets.right
-            }
-
-            v.setPadding(left, cutInsets.top, right, 0)
-
-            // Ensure FPS text doesn't get cut off by rounded display corners
-            val sidePadding = resources.getDimensionPixelSize(R.dimen.spacing_large)
-            if (cutInsets.left == 0) {
-                binding.showFpsText.setPadding(
-                    sidePadding,
-                    cutInsets.top,
-                    cutInsets.right,
-                    cutInsets.bottom
-                )
-            } else {
-                binding.showFpsText.setPadding(
-                    cutInsets.left,
-                    cutInsets.top,
-                    cutInsets.right,
-                    cutInsets.bottom
-                )
-            }
-            windowInsets
-        }
-    }
+//    private fun setInsets() {
+//        ViewCompat.setOnApplyWindowInsetsListener(
+//            binding.inGameMenu
+//        ) { v: View, windowInsets: WindowInsetsCompat ->
+//            val cutInsets: Insets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
+//            var left = 0
+//            var right = 0
+//            if (ViewCompat.getLayoutDirection(v) == ViewCompat.LAYOUT_DIRECTION_LTR) {
+//                left = cutInsets.left
+//            } else {
+//                right = cutInsets.right
+//            }
+//
+//            v.setPadding(left, cutInsets.top, right, 0)
+//
+//            // Ensure FPS text doesn't get cut off by rounded display corners
+//            val sidePadding = resources.getDimensionPixelSize(R.dimen.spacing_large)
+//            if (cutInsets.left == 0) {
+//                binding.showFpsText.setPadding(
+//                    sidePadding,
+//                    cutInsets.top,
+//                    cutInsets.right,
+//                    cutInsets.bottom
+//                )
+//            } else {
+//                binding.showFpsText.setPadding(
+//                    cutInsets.left,
+//                    cutInsets.top,
+//                    cutInsets.right,
+//                    cutInsets.bottom
+//                )
+//            }
+//            windowInsets
+//        }
+//    }
 
     private class EmulationState(private val gamePath: String) {
         private var state: State
