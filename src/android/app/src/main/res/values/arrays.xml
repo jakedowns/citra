@@ -141,6 +141,8 @@
         <item>@string/interlaced</item>
         <item>@string/reverse_interlaced</item>
         <item>@string/cardboard_vr</item>
+        <item>@string/lumepad_1</item>
+        <item>@string/lumepad_2</item>
     </string-array>
 
     <integer-array name="render3dValues">
@@ -150,6 +152,8 @@
         <item>3</item>
         <item>4</item>
         <item>5</item>
+        <item>6</item>
+        <item>7</item>
     </integer-array>
 
     <string-array name="graphicsApiNames">
@@ -450,5 +454,4 @@
         <item>11</item>
         <item>12</item>
     </integer-array>
-
 </resources>

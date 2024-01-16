@@ -1,0 +1,87 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.leia.cnsdk",
+    "module": "sdk-faceTrackingInApp",
+    "version": "0.7.28",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "inAppReleaseVariantInAppReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "sdk-faceTrackingInApp-0.7.28.aar",
+          "url": "sdk-faceTrackingInApp-0.7.28.aar",
+          "size": 28313806,
+          "sha512": "d134a65d842ee1cd1c5a29cfaeb47eedcf20783ccb08faaad274565d5e988009deb3d1dfb4547d646b5a60bcc29db552155cdc7d85144b1542a98b146269ade8",
+          "sha256": "5dac6637b8013d6d0004b9291c820adf6b047f0f19c97c9908575173593bc3e4",
+          "sha1": "435a5ec55709ea72ef0de2679652ff40de5d737f",
+          "md5": "4e6fc449a5c7dc091b95ae620b4c9da0"
+        }
+      ]
+    },
+    {
+      "name": "inAppReleaseVariantInAppReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.core",
+          "module": "core",
+          "version": {
+            "requires": "1.7.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "sdk-faceTrackingInApp-0.7.28.aar",
+          "url": "sdk-faceTrackingInApp-0.7.28.aar",
+          "size": 28313806,
+          "sha512": "d134a65d842ee1cd1c5a29cfaeb47eedcf20783ccb08faaad274565d5e988009deb3d1dfb4547d646b5a60bcc29db552155cdc7d85144b1542a98b146269ade8",
+          "sha256": "5dac6637b8013d6d0004b9291c820adf6b047f0f19c97c9908575173593bc3e4",
+          "sha1": "435a5ec55709ea72ef0de2679652ff40de5d737f",
+          "md5": "4e6fc449a5c7dc091b95ae620b4c9da0"
+        }
+      ]
+    },
+    {
+      "name": "inAppReleaseVariantInAppReleaseJavaDocPublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "sdk-faceTrackingInApp-0.7.28-javadoc.jar",
+          "url": "sdk-faceTrackingInApp-0.7.28-javadoc.jar",
+          "size": 534197,
+          "sha512": "6cda0d2c65762d3bf77b13d9b1765e10148a761334e6fe32342a15fca3beb303b7e5a81e030b8cb16923a189b976771961ba31b2af7fcf89f46f8fb991282d89",
+          "sha256": "39df0833c8d22029049a2de36aefc04061ea149cd507e44f2d9671b518e0e443",
+          "sha1": "6095520ba21e1c85333f38c6b30a298996ab6e4f",
+          "md5": "07df627425d58dafa1d5151bc64ae84f"
+        }
+      ]
+    }
+  ]
+}
