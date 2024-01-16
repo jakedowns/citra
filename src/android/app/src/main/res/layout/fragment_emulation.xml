@@ -6,10 +6,10 @@
     tools:context="org.citra.citra_emu.fragments.EmulationFragment">
 
     <!-- This is what everything is rendered to during emulation -->
-    <com.leia.sdk.views.InterlacedSurfaceView
-        android:id="@+id/surface_emulation"
+    <com.simongellis.leia.webxr.LeiaSurfaceView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:id="@+id/surface_emulation"
         android:focusable="false"
         android:focusableInTouchMode="false" />
 

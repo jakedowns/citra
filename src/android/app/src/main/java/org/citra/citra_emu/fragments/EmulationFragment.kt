@@ -68,7 +68,7 @@ import org.citra.citra_emu.utils.Log
 import org.citra.citra_emu.utils.ViewUtils
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
-import com.leia.sdk.views.InterlacedSurfaceView;
+import com.simongellis.leia.webxr.LeiaSurfaceView
 
 class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.FrameCallback {
     private val preferences: SharedPreferences
@@ -167,7 +167,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback, Choreographer.Fram
         }
 
         // attempting to integrate leia sdk here
-        InterlacedSurfaceView surfaceView = contents.findViewById(R.id.surface_emulation);
+        LeiaSurfaceView surfaceView = binding.surfaceEmulation; // contents.findViewById(R.id.surface_emulation);
         surfaceView.getHolder().addCallback(this);
 
         // pre-leia integration, do we keep this?
