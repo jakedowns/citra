@@ -20,4 +20,3 @@ dependencyResolutionManagement {
 }
 
 include(":app")
-include(":leia_webxr")
