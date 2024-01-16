@@ -1,4 +1,4 @@
-package com.simongellis.leia.webxr
+package org.citra.citra_emu.vendor.simongellis.leia.webxr
 
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20.*
