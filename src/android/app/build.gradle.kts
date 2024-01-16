@@ -268,6 +268,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("io.coil-kt:coil:2.2.2")
+    implementation("com.simongellis.leia.webxr")
     addSdkDependency(false)
 }
 
