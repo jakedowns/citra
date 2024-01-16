@@ -11,11 +11,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.opengl.GLSurfaceView
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -29,8 +25,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.fragment.NavHostFragment
 import androidx.preference.PreferenceManager
-import com.leia.core.LogLevel
-import com.leia.sdk.LeiaSDK
 import org.citra.citra_emu.CitraApplication
 import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.R
@@ -50,15 +44,7 @@ import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.ThemeUtil
 import org.citra.citra_emu.viewmodel.EmulationViewModel
 
-class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
-	private lateinit var surfaceView: GLSurfaceView
-    private var isCnsdkInitialized = false
-
-    private val cnsdkDelegateMutex = Object()
-    private var subDelegates = mutableSetOf<LeiaSDK.Delegate>()
-
-    private var mainThreadHandler: Handler? = null
-
+class EmulationActivity : AppCompatActivity() {
     private val preferences: SharedPreferences
         get() = PreferenceManager.getDefaultSharedPreferences(CitraApplication.appContext)
     private var foregroundService: Intent? = null
@@ -77,10 +63,6 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         settingsViewModel.settings.loadSettings()
 
         super.onCreate(savedInstanceState)
-
-        mainThreadHandler = Handler(Looper.getMainLooper())
-        // Initialize Leia SDK
-        initLeiaSDK();
 
         binding = ActivityEmulationBinding.inflate(layoutInflater)
         screenAdjustmentUtil = ScreenAdjustmentUtil(windowManager, settingsViewModel.settings)
@@ -110,23 +92,6 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         EmulationLifecycleUtil.addShutdownHook(hook = { this.finish() })
     }
 
-    private fun initLeiaSDK() {
-        try {
-            val initArgs = LeiaSDK.InitArgs().apply {
-                platform.app = this@EmulationActivity.application
-                platform.logLevel = LogLevel.Trace
-                faceTrackingServerLogLevel = LogLevel.Trace
-                delegate = this@EmulationActivity
-                enableFaceTracking = false
-                startFaceTracking = false
-            }
-            LeiaSDK.createSDK(initArgs)
-        } catch (e: Exception) {
-            Log.e("[EmulationActivity]", "Error initializing LeiaSDK: ${e.message}")
-            e.printStackTrace()
-        }
-    }
-
     // On some devices, the system bars will not disappear on first boot or after some
     // rotations. Here we set full screen immersive repeatedly in onResume and in
     // onWindowFocusChanged to prevent the unwanted status bar state.
@@ -150,14 +115,6 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
         stopForegroundService(this)
         super.onDestroy()
     }
-
-    override fun onStop () {
-		super.onStop();
-	}
-
-	override fun onPause() {
-		super.onPause()
-	}
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -496,32 +453,6 @@ class EmulationActivity : AppCompatActivity(), LeiaSDK.Delegate {
 
             OnFilePickerResult(result.toString())
         }
-    
-    // Implement the LeiaSDK.Delegate methods
-    override fun didInitialize(leiaSDK: LeiaSDK) {
-        synchronized(cnsdkDelegateMutex) {
-            isCnsdkInitialized = true
-            subDelegates.forEach { it.didInitialize(leiaSDK) }
-        }
-    }
-
-    override fun onFaceTrackingFatalError(leiaSDK: LeiaSDK) {
-//        synchronized(cnsdkDelegateMutex) {
-//            subDelegates.forEach { it.onFaceTrackingFatalError(leiaSDK) }
-//        }
-
-        // When face tracking encounters a fatal error, it's no longer can be used.
-        // The best we can do is to disable it, and possibly attempt to enable it later.
-        mainThreadHandler?.post { leiaSDK.enableFaceTracking(false) }
-    }
-
-    override fun onFaceTrackingStarted(leiaSDK: LeiaSDK) {
-        // Handle start of face tracking
-    }
-
-    override fun onFaceTrackingStopped(leiaSDK: LeiaSDK) {
-        // Handle stop of face tracking
-    }
 
     companion object {
         fun stopForegroundService(activity: Activity) {
