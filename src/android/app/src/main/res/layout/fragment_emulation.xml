@@ -1,17 +1,18 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context="org.citra.citra_emu.fragments.EmulationFragment">
+    tools:openDrawer="start">
 
-    <!-- This is what everything is rendered to during emulation -->
-    <org.citra.citra_emu.vendor.simongellis.leia.webxr.LeiaSurfaceView
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
         <!-- This is what everything is rendered to during emulation -->
-        <com.leia.sdk.views.InterlacedSurfaceView
+        <org.citra.citra_emu.vendor.simongellis.leia.webxr.LeiaSurfaceView
             android:id="@+id/surface_emulation"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -133,38 +134,9 @@
         android:id="@+id/in_game_menu"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
-        android:id="@+id/surface_emulation"
-        android:focusable="false"
-        android:focusableInTouchMode="false" />
+        android:layout_gravity="start"
+        app:headerLayout="@layout/header_in_game"
+        app:menu="@menu/menu_in_game"
+        tools:visibility="gone" />
 
-    <!-- This is the onscreen input overlay -->
-    <org.citra.citra_emu.overlay.InputOverlay
-        android:id="@+id/surface_input_overlay"
-        android:layout_height="match_parent"
-        android:layout_width="match_parent"
-        android:focusable="true"
-        android:focusableInTouchMode="true" />
-
-    <TextView
-        android:id="@+id/show_fps_text"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="2dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:clickable="false"
-        android:linksClickable="false"
-        android:longClickable="false"
-        android:shadowColor="@android:color/black"
-        android:textColor="@android:color/white"
-        android:textSize="12sp" />
-
-    <Button
-        android:id="@+id/done_control_config"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:padding="@dimen/spacing_small"
-        android:text="@string/emulation_done"
-        android:visibility="gone" />
-
-</FrameLayout>
+</androidx.drawerlayout.widget.DrawerLayout>
