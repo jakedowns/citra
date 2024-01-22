@@ -102,6 +102,7 @@ android {
         jvmTarget = "17"
     }
 
+
     if (shouldAddDebugInfo()) {
         packaging {
             jniLibs.keepDebugSymbols.add("**/*.so")
@@ -114,6 +115,10 @@ android {
 //        ndk {
 //            debugSymbolLevel.set("FULL")
 //        }
+    }
+
+    androidResources {
+        generateLocaleConfig = true
     }
 
     packaging {

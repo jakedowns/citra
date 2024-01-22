@@ -432,6 +432,7 @@ struct Values {
     Setting<bool> use_cpu_jit{true, "use_cpu_jit"};
     SwitchableSetting<s32, true> cpu_clock_percentage{100, 5, 400, "cpu_clock_percentage"};
     SwitchableSetting<bool> is_new_3ds{true, "is_new_3ds"};
+    SwitchableSetting<bool> lle_applets{false, "lle_applets"};
 
     // Data Storage
     Setting<bool> use_virtual_sd{true, "use_virtual_sd"};
@@ -448,13 +449,19 @@ struct Values {
     Setting<bool> allow_plugin_loader{true, "allow_plugin_loader"};
 
     // Renderer
-    SwitchableSetting<GraphicsAPI, true> graphics_api{
-#ifdef HAS_OPENGL
+    SwitchableSetting<GraphicsAPI, true> graphics_api {
+#if defined(ENABLE_OPENGL)
         GraphicsAPI::OpenGL,
-#else
+#elif defined(ENABLE_VULKAN)
         GraphicsAPI::Vulkan,
+#elif defined(ENABLE_SOFTWARE_RENDERER)
+        GraphicsAPI::Software,
+#else
+// TODO: Add a null renderer backend for this, perhaps.
+#error "At least one renderer must be enabled."
 #endif
-        GraphicsAPI::Software, GraphicsAPI::Vulkan, "graphics_api"};
+            GraphicsAPI::Software, GraphicsAPI::Vulkan, "graphics_api"
+    };
     SwitchableSetting<u32> physical_device{0, "physical_device"};
     Setting<bool> use_gles{false, "use_gles"};
     Setting<bool> renderer_debug{false, "renderer_debug"};
