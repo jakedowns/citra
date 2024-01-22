@@ -29,6 +29,7 @@ class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSurface
     fun setSurfaceListener(surfaceListener: LeiaHelper3D.SurfaceListener) {
         val surfaceAsset = InputViewsAsset.createEmptySurfaceForVideo {
                 surfaceTexture: SurfaceTexture? ->
+            surfaceTexture?.setDefaultBufferSize(2560, 1600)
             Log.d("SurfaceListener", "createEmptySurfaceForVideo -> calling onSurfaceChanged")
             surfaceListener.onSurfaceChanged(Surface(surfaceTexture))
         }
