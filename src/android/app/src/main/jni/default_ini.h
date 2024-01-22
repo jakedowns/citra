@@ -155,12 +155,12 @@ bg_blue =
 bg_green =
 
 # Whether and how Stereoscopic 3D should be rendered
-# 0 (default): Off, 1: Side by Side, 2: Anaglyph, 3: Interlaced, 4: Reverse Interlaced, 5: Cardboard VR, 6: Lumepad 1, 7: Lumepad 2
-render_3d = 7
+# 0 (default): Off, 1: Side by Side, 2: Anaglyph, 3: Interlaced, 4: Reverse Interlaced, 5: Cardboard VR
+render_3d = 1
 
 # Change 3D Intensity
 # 0 - 100: Intensity. 0 (default)
-factor_3d = 50
+factor_3d = 35
 
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.

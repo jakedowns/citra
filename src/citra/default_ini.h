@@ -157,11 +157,11 @@ bg_green =
 
 # Whether and how Stereoscopic 3D should be rendered
 # 0 (default): Off, 1: Side by Side, 2: Anaglyph, 3: Interlaced, 4: Reverse Interlaced
-render_3d =
+render_3d = 1
 
 # Change 3D Intensity
 # 0 - 100: Intensity. 0 (default)
-factor_3d =
+factor_3d = 35
 
 # Change Default Eye to Render When in Monoscopic Mode
 # 0 (default): Left, 1: Right
