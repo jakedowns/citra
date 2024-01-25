@@ -1,3 +1,10 @@
+> ***Notice***: this is a special **unofficial** fork of the wonderful [Citra](https://github.com/citra-emu/citra/) project
+> 
+> For more information go here: [Citra 3DS for Lume Pad 2 - 3D Apps / Leia Appstore - The 3D•AI Forum](https://forums.leialoft.com/t/citra-3ds-for-lume-pad-2/2821/30?u=jakedowns)
+> 
+
+---
+
 <h1 align="center">
   <br>
   <a href="https://citra-emu.org/"><img src="https://raw.githubusercontent.com/citra-emu/citra-assets/master/Main/citra_logo.svg" alt="Citra" width="200"></a>
